@@ -267,7 +267,7 @@ class FlowProvider(LLMProvider):
         headers = {
             "accept": "/",
             "Content-Type": "application/json",
-            "FlowTenant": "flowteam",
+            "FlowTenant": os.environ.get("FLOW_TENANT", "flowteam"),
         }
 
         payload = {
@@ -490,7 +490,7 @@ class FlowBedrockProvider(LLMProvider):
         headers = {
             "accept": "/",
             "Content-Type": "application/json",
-            "FlowTenant": "flowteam",
+            "FlowTenant": os.environ.get("FLOW_TENANT", "flowteam"),
         }
 
         payload = {

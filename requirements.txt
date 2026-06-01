@@ -16,9 +16,9 @@ pydantic==2.11.7
 requests==2.32.3
 
 # Analysis and visualization dependencies
-pandas==2.0.0
-matplotlib==3.5.0
-openpyxl==3.0.9
+pandas==2.2.3
+matplotlib==3.9.4
+openpyxl==3.1.5
 
 # MCP server support
 mcp[cli]
