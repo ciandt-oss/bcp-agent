@@ -11,7 +11,7 @@ import os
 from typing import Optional
 
 from dotenv import load_dotenv
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from src.bcp.bcp_calculator import BCPCalculator
 from src.bcp.logger import setup_logger
@@ -25,19 +25,6 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_server(logger: logging.Logger) -> FastMCP:
-    mcp = FastMCP("bcp-calculator-mcp")
-
-    @mcp.tool()
-    async def calculate_bcp(story_content: str, provider: str = "openai") -> dict:
-        """Calculate BCP via MCP tool."""
-        calculator = BCPCalculator(logger, provider_name=provider)
-        result = calculator.calculate_bcp(story_content)
-        return {"result": result}
-
-    return mcp
-
-
 def main() -> None:
     load_dotenv()
     args = parse_arguments()
@@ -46,13 +33,7 @@ def main() -> None:
     logger.info(f"Starting MCP HTTP Server on {args.host}:{args.port}")
     logger.info(f"Allowed origins: {args.allowed_origins}")
 
-    # Configure server bind settings via FastMCP constructor arguments
-    mcp = FastMCP(
-        "bcp-calculator-mcp",
-        host=args.host,
-        port=args.port,
-        streamable_http_path="/mcp",
-    )
+    mcp = MCPServer("bcp-calculator-mcp")
 
     def apply_provider_overrides(
         provider: str | None,
@@ -76,7 +57,7 @@ def main() -> None:
                 os.environ["ANTHROPIC_API_KEY"] = api_key
             if model_name:
                 os.environ["ANTHROPIC_MODEL_NAME"] = model_name
-        elif p in ("flow-openai", "flow"):
+        elif p == "flow-openai":
             if flow_client_id:
                 os.environ["FLOW_CLIENT_ID"] = flow_client_id
             if flow_client_secret:
@@ -96,13 +77,8 @@ def main() -> None:
                 os.environ["FLOW_CLIENT_SECRET"] = flow_client_secret
             if flow_base_url:
                 os.environ["FLOW_BASE_URL"] = flow_base_url
-            if flow_tenant:
-                os.environ["FLOW_TENANT"] = flow_tenant
-            if flow_agent:
-                os.environ["FLOW_AGENT"] = flow_agent
             if model_name:
                 os.environ["FLOW_BEDROCK_MODEL_NAME"] = model_name
-        # No else: unsupported provider handled downstream by BCPCalculator
 
     @mcp.tool()
     async def calculate_bcp(
@@ -129,7 +105,12 @@ def main() -> None:
         return {"result": result}
 
     # Run using streamable HTTP transport
-    mcp.run(transport="streamable-http")
+    mcp.run(
+        transport="streamable-http",
+        host=args.host,
+        port=args.port,
+        streamable_http_path="/mcp",
+    )
 
 
 if __name__ == "__main__":

@@ -35,7 +35,7 @@ client = BCPClient()
 # Or initialize with specific settings
 client = BCPClient(
     log_level="INFO",  # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    provider="claude"  # LLM provider to use (openai or claude)
+    provider="claude"  # LLM provider to use (openai, claude, flow-openai, flow-bedrock)
 )
 ```
 
@@ -61,8 +61,10 @@ results = client.calculate(story_content)
 # Access the results
 print(f"Total BCP: {results['total_bcp']}")
 print("Breakdown:")
-for component, points in results["breakdown"].items():
-    print(f"  {component}: {points}")
+for dimension, points in results["breakdown"].items():
+    print(f"  {dimension}: {points}")
+print(f"Complexity Maturity: {results['maturity']['complexity']}/5")
+print(f"INVEST Maturity: {results['maturity']['invest']}/5")
 ```
 
 ### Calculate BCP for a File
@@ -136,8 +138,10 @@ results = client.calculate(story)
 print("=== CALCULATION RESULTS ===")
 print(f"Total BCP: {results['total_bcp']}")
 print("Breakdown:")
-for component, points in results["breakdown"].items():
-    print(f"  {component}: {points}")
+for dimension, points in results["breakdown"].items():
+    print(f"  {dimension}: {points}")
+print(f"Complexity Maturity: {results['maturity']['complexity']}/5")
+print(f"INVEST Maturity: {results['maturity']['invest']}/5")
 
 # Compare providers
 print("\n=== PROVIDER COMPARISON ===")
@@ -165,7 +169,7 @@ BCPClient(log_level="INFO", provider="openai")
 ```
 
 - `log_level`: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- `provider`: LLM provider to use (openai or claude)
+- `provider`: LLM provider to use (openai, claude, flow-openai, flow-bedrock)
 
 #### Methods
 

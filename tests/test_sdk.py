@@ -41,7 +41,7 @@ def test_sdk_direct():
     log_level = getattr(logging, "DEBUG")
     logger = setup_logger(log_level)
 
-    calculator = BCPCalculator(logger=logger, provider_name="flow-openai")
+    calculator = BCPCalculator(logger=logger, provider_name="openai")
 
     # Calculate BCP
     result = calculator.calculate_bcp(TEST_STORY)

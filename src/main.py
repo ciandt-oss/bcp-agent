@@ -3,7 +3,7 @@
 BCP Calculator - Command Line Interface
 
 This script provides a CLI for calculating Business Complexity Points (BCP)
-of user stories using a series of predefined prompts and multiple LLM providers.
+of user stories using the 13-dimensions decomposed pipeline and multiple LLM providers.
 """
 
 import argparse
@@ -52,16 +52,20 @@ def parse_arguments():
         default="openai",
         help="LLM provider to use (default: openai)"
     )
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=5,
+        help="Maximum parallel threads per wave (default: 5)"
+    )
     return parser.parse_args()
 
 def read_story_file(file_path: str, logger: logging.Logger) -> str:
     """Read content from a story file."""
-    # Check if story file exists
     if not os.path.isfile(file_path):
         logger.error(f"Story file not found: {file_path}")
         sys.exit(1)
-    
-    # Read story content
+
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             return file.read()
@@ -69,13 +73,10 @@ def read_story_file(file_path: str, logger: logging.Logger) -> str:
         logger.error(f"Error reading story file: {str(e)}")
         sys.exit(1)
 
-def calculate_bcp_for_story(story_content: str, provider: str, logger: logging.Logger) -> Dict[str, Any]:
+def calculate_bcp_for_story(story_content: str, provider: str, logger: logging.Logger, max_workers: int = 5) -> Dict[str, Any]:
     """Calculate BCP for a given story."""
     try:
-        # Initialize BCP calculator with selected provider
-        calculator = BCPCalculator(logger, provider_name=provider)
-        
-        # Calculate BCP
+        calculator = BCPCalculator(logger, provider_name=provider, max_workers=max_workers)
         return calculator.calculate_bcp(story_content)
     except Exception as e:
         logger.error(f"Error calculating BCP: {str(e)}")
@@ -83,10 +84,8 @@ def calculate_bcp_for_story(story_content: str, provider: str, logger: logging.L
 
 def save_or_print_results(results: Dict[str, Any], output_format: str, output_file: str = None, logger: logging.Logger = None) -> None:
     """Save results to file or print to stdout."""
-    # Format results based on specified format
     formatted_results = format_results_json(results) if output_format == "json" else format_results_text(results)
-    
-    # Output to file or stdout
+
     if output_file:
         try:
             with open(output_file, 'w', encoding='utf-8') as file:
@@ -102,87 +101,71 @@ def save_or_print_results(results: Dict[str, Any], output_format: str, output_fi
 
 def main():
     """Main entry point for the BCP Calculator CLI."""
-    # Load environment variables
     load_dotenv()
-    
-    # Parse command line arguments
     args = parse_arguments()
-    
-    # Setup logging
+
     log_level = getattr(logging, args.log_level)
     logger = setup_logger(log_level)
-    
-    # Read story content
+
     story_content = read_story_file(args.story_file, logger)
-    
-    # Calculate BCP
-    results = calculate_bcp_for_story(story_content, args.provider, logger)
-    
-    # Output results
+    results = calculate_bcp_for_story(story_content, args.provider, logger, args.max_workers)
     save_or_print_results(results, args.format, args.output_file, logger)
 
 def format_results_json(results: Dict[str, Any]) -> str:
-    """Format the results as JSON."""
-    # Create a structured JSON output
+    """Format the results as JSON for the 13-dimensions pipeline output."""
     json_output = {
         "story_name": results.get("story_name", "Unknown"),
         "total_bcp": results.get("total_bcp", 0),
-        "components": results.get("breakdown", {}),
-        "steps": {}
+        "breakdown": results.get("breakdown", {}),
+        "maturity": results.get("maturity", {}),
+        "cells": {},
     }
-    
-    # Extract maturity and invest scores
-    maturity_score = 0
-    invest_score = 0
-    
-    # Add step results with extracted data
-    for step_name, step_result in results["steps"].items():
-        if isinstance(step_result, dict):
-            # Extract useful information from step result
-            step_data = {
-                "assessment": step_result.get("assessment", step_result.get("description", "")),
-                "score": step_result.get("score", step_result.get("total", 0)),
-                "classification": step_result.get("classification", ""),
-                "raw_response": step_result.get("raw_response", "")
+
+    cells = results.get("cells", {})
+    for cell_name, cell_result in cells.items():
+        if isinstance(cell_result, dict):
+            raw = cell_result.get("raw_output", {})
+            json_output["cells"][cell_name] = {
+                "score": cell_result.get("score", 0),
+                "summary": raw.get("summary", "") if isinstance(raw, dict) else "",
+                "classification": raw.get("classification", "") if isinstance(raw, dict) else "",
             }
-            json_output["steps"][step_name] = step_data
-            
-            # Capture maturity and invest scores
-            if step_name == "Story Maturity Complexity":
-                maturity_score = step_result.get("score", 0)
-            elif step_name == "Story INVEST Maturity":
-                invest_score = step_result.get("score", 0)
         else:
-            json_output["steps"][step_name] = {"raw_response": str(step_result)}
-    
-    # Add maturity and invest scores to root
-    json_output["score"] = {
-        "maturity": maturity_score,
-        "invest": invest_score
-    }
-    
+            json_output["cells"][cell_name] = {"raw_response": str(cell_result)}
+
     return json.dumps(json_output, indent=2, ensure_ascii=False)
 
 def format_results_text(results: Dict[str, Any]) -> str:
-    """Format the results as text (legacy format)."""
+    """Format the results as text."""
     output = []
-    
-    # Add step results
-    for step_name, step_result in results["steps"].items():
-        output.append(f"=== {step_name} ===")
-        output.append(str(step_result))
-        output.append("")
-    
-    # Add final BCP
-    output.append("=== FINAL BUSINESS COMPLEXITY POINTS ===")
-    output.append(f"Total BCP: {results['total_bcp']}")
+
+    output.append("=== BCP 13 DIMENSIONS — RESULTS ===")
+    output.append(f"Story: {results.get('story_name', 'Unknown')}")
     output.append("")
-    
-    # Add breakdown
-    output.append("=== BCP BREAKDOWN ===")
-    for component, score in results["breakdown"].items():
-        output.append(f"{component}: {score}")
-    
+
+    output.append("=== DIMENSION BREAKDOWN ===")
+    breakdown = results.get("breakdown", {})
+    for dim, score in breakdown.items():
+        output.append(f"  {dim}: {score}")
+    output.append("")
+
+    output.append("=== MATURITY ===")
+    maturity = results.get("maturity", {})
+    output.append(f"  Complexity Maturity: {maturity.get('complexity', 'N/A')}")
+    output.append(f"  INVEST Maturity: {maturity.get('invest', 'N/A')}")
+    output.append("")
+
+    output.append("=== CELL DETAILS ===")
+    cells = results.get("cells", {})
+    for cell_name, cell_result in cells.items():
+        score = cell_result.get("score", "N/A") if isinstance(cell_result, dict) else "N/A"
+        output.append(f"  {cell_name}: score={score}")
+    output.append("")
+
+    output.append("=== TOTAL BCP ===")
+    output.append(f"  Total: {results.get('total_bcp', 0)}")
+    output.append("")
+
     return "\n".join(output)
 
 if __name__ == "__main__":
