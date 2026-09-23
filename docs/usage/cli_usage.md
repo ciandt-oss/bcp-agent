@@ -36,7 +36,8 @@ The CLI supports the following options:
 |--------|-------------|---------|
 | `--log-level` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) | INFO |
 | `--output-file` | Path to save the output results | None (print to stdout) |
-| `--provider` | LLM provider to use (openai or claude) | openai |
+| `--provider` | LLM provider to use (openai, claude, flow-openai, flow-bedrock) | openai |
+| `--max-workers` | Maximum parallel threads per wave | 5 |
 | `--format` | Output format (text or json) | json |
 
 ## Examples
@@ -97,44 +98,49 @@ python run_cli.py tests/data/story1.md --provider claude --format text --output-
 
 The output includes:
 
-- Results from each step in the process
-- Final Business Complexity Points (BCP)
-- Breakdown of points by component:
-  - Business Rules
-  - Interface Elements
-  - External Integrations (Boundaries)
+- **BCP Total**: Sum of all functional dimension scores + NFR score
+- **Breakdown**: Individual scores for all 11 dimensions (10 functional + 1 NFR)
+- **Maturity**: Complexity Maturity Score (CMS) and INVEST Maturity Score (IMS)
+- **Cells**: Detailed results from each of the 14 pipeline cells
 
 ### Sample JSON Output
 
 ```json
 {
   "story_name": "User Story: Add Payment Method",
-  "total_bcp": 13,
-  "components": {
-    "Business Rules": 5,
-    "UI Elements": 3,
-    "External Integrations": 5
+  "total_bcp": 28,
+  "breakdown": {
+    "business_rules": 7,
+    "interface_elements": 5,
+    "solution_variabilities": 1,
+    "domain_entities": 2,
+    "new_domain_entities": 0,
+    "roles_permissions": 2,
+    "boundaries": 3,
+    "background_processes": 0,
+    "notifications": 0,
+    "audits": 0,
+    "nfr": 8
   },
-  "steps": {
-    "Story Maturity Complexity": {
-      "assessment": "The story is well-defined with clear acceptance criteria",
-      "score": 4,
-      "classification": "Mature"
-    },
-    "Story INVEST Maturity": {
-      "assessment": "Independent, testable, but somewhat large in scope",
-      "score": 3,
-      "classification": "Partially Mature"
-    },
-    "Business Rules Complexity": {
-      "total": 5
-    },
-    "UI Elements Complexity": {
-      "total": 3
-    },
-    "External Integrations Complexity": {
-      "total": 5
-    }
+  "maturity": {
+    "complexity": 3,
+    "invest": 4
+  },
+  "cells": {
+    "functional_business_rules": {"score": 7, "raw_output": {"summary": "3 rules identified"}},
+    "functional_interface_elements": {"score": 5, "raw_output": {"summary": "3 static + 1 dynamic"}},
+    "functional_solution_variabilities": {"score": 1, "raw_output": {"summary": "No variabilities"}},
+    "functional_domain_entities": {"score": 2, "raw_output": {"summary": "3 entities"}},
+    "functional_new_domain_entities": {"score": 0, "raw_output": {"summary": "No new entities"}},
+    "functional_roles_permissions": {"score": 2, "raw_output": {"summary": "Basic permissions"}},
+    "functional_boundaries": {"score": 3, "raw_output": {"summary": "1 boundary: Payment gateway"}},
+    "functional_background_processes": {"score": 0, "raw_output": {"summary": "No background processes"}},
+    "functional_notifications": {"score": 0, "raw_output": {"summary": "No notifications"}},
+    "functional_audits": {"score": 0, "raw_output": {"summary": "No audits"}},
+    "nfr_scoring": {"score": 8, "raw_output": {"summary": "Security L=5, Quality M=3"}},
+    "functional_aggregator": {"score": 20, "raw_output": {"summary": "10 dimensions consolidated"}},
+    "complexity_maturity": {"score": 3, "raw_output": {"classification": "Meets Basic Standards"}},
+    "invest_maturity": {"score": 4, "raw_output": {"classification": "Demonstrates Good Maturity"}}
   }
 }
 ```
@@ -142,32 +148,44 @@ The output includes:
 ### Sample Text Output
 
 ```
-=== Story Maturity Complexity ===
-The story is well-defined with clear acceptance criteria
-Score: 4
-Classification: Mature
+=== BCP 13 DIMENSIONS — RESULTS ===
+Story: User Story: Add Payment Method
 
-=== Story INVEST Maturity ===
-Independent, testable, but somewhat large in scope
-Score: 3
-Classification: Partially Mature
+=== DIMENSION BREAKDOWN ===
+  business_rules: 7
+  interface_elements: 5
+  solution_variabilities: 1
+  domain_entities: 2
+  new_domain_entities: 0
+  roles_permissions: 2
+  boundaries: 3
+  background_processes: 0
+  notifications: 0
+  audits: 0
+  nfr: 8
 
-=== Business Rules Complexity ===
-Total: 5
+=== MATURITY ===
+  Complexity Maturity: 3
+  INVEST Maturity: 4
 
-=== UI Elements Complexity ===
-Total: 3
+=== CELL DETAILS ===
+  functional_business_rules: score=7
+  functional_interface_elements: score=5
+  functional_solution_variabilities: score=1
+  functional_domain_entities: score=2
+  functional_new_domain_entities: score=0
+  functional_roles_permissions: score=2
+  functional_boundaries: score=3
+  functional_background_processes: score=0
+  functional_notifications: score=0
+  functional_audits: score=0
+  nfr_scoring: score=8
+  functional_aggregator: score=20
+  complexity_maturity: score=3
+  invest_maturity: score=4
 
-=== External Integrations Complexity ===
-Total: 5
-
-=== FINAL BUSINESS COMPLEXITY POINTS ===
-Total BCP: 13
-
-=== BCP BREAKDOWN ===
-Business Rules: 5
-UI Elements: 3
-External Integrations: 5
+=== TOTAL BCP ===
+  Total: 28
 ```
 
 ## Troubleshooting

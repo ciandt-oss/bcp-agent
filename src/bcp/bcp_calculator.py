@@ -1,274 +1,367 @@
 """
-BCP Calculator
+BCP Calculator — 13 Dimensions Pipeline (V2 Decomposed)
 
-This module orchestrates the flow for calculating Business Complexity Points (BCP)
-of user stories using a series of predefined prompts and GPT-4o.
+Orchestrates the BCP (Business Complexity Points) calculation using a decomposed
+pipeline with 14 cells across 3 execution waves:
+
+  Wave 1: 10 functional dimension cells + 1 NFR cell (parallel)
+  Wave 2: 1 aggregator cell (depends on 10 functional scores)
+  Wave 3: 2 maturity evaluation cells (depend on aggregator + NFR)
+
+Total BCP = functional_aggregator.score + nfr_scoring.score
 """
 
 import json
 import logging
-import math
 import os
-from typing import Dict, Any, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, Any, List, Optional
 
 from .prompt_handler import PromptHandler
+from .formula_evaluator import FormulaEvaluator
 from .logger import StepLogger
+
+
+FUNCTIONAL_DIMENSIONS: List[Dict[str, str]] = [
+    {
+        "name": "business_rules",
+        "display": "Business Rules",
+        "prompt": "thirteen/functional/business-rules.md",
+        "formula": "sum(scores_extracted)",
+    },
+    {
+        "name": "interface_elements",
+        "display": "Interface Elements",
+        "prompt": "thirteen/functional/interface-elements.md",
+        "formula": "ceil(count(static_elements)/5)*static_weight + ceil(count(dynamic_elements)/5)*dynamic_weight",
+    },
+    {
+        "name": "solution_variabilities",
+        "display": "Solution Variabilities",
+        "prompt": "thirteen/functional/solution-variabilities.md",
+        "formula": "dimension_solution_variabilities",
+    },
+    {
+        "name": "domain_entities",
+        "display": "Domain Entities",
+        "prompt": "thirteen/functional/domain-entities.md",
+        "formula": "dimension_domain_entities",
+    },
+    {
+        "name": "new_domain_entities",
+        "display": "New Domain Entities",
+        "prompt": "thirteen/functional/new-domain-entities.md",
+        "formula": "2*ceil(count(block_a_modified)/3) + 5*ceil(count(block_b_new)/3)",
+    },
+    {
+        "name": "roles_permissions",
+        "display": "Roles & Permissions",
+        "prompt": "thirteen/functional/roles-permissions.md",
+        "formula": "dimension_roles_permissions",
+    },
+    {
+        "name": "boundaries",
+        "display": "Boundaries",
+        "prompt": "thirteen/functional/boundaries.md",
+        "formula": "sum(scores_extracted)",
+    },
+    {
+        "name": "background_processes",
+        "display": "Background Processes",
+        "prompt": "thirteen/functional/background-processes.md",
+        "formula": "dimension_background_processes",
+    },
+    {
+        "name": "notifications",
+        "display": "Notifications",
+        "prompt": "thirteen/functional/notifications.md",
+        "formula": "count(notification_events)",
+    },
+    {
+        "name": "audits",
+        "display": "Audits",
+        "prompt": "thirteen/functional/audits.md",
+        "formula": "count(audited_entities)",
+    },
+]
+
+NFR_CELL = {
+    "name": "nfr_scoring",
+    "display": "NFR BCP (3 dimensions)",
+    "prompt": "thirteen/nfr-scoring.md",
+    "formula": "dimension_quality_attributes + dimension_security_compliance + dimension_user_experience_accessibility",
+}
+
+AGGREGATOR_CELL = {
+    "name": "functional_aggregator",
+    "display": "Functional Aggregator",
+    "prompt": "thirteen/functional/aggregator.md",
+}
+
+MATURITY_CELLS = [
+    {
+        "name": "complexity_maturity",
+        "display": "Complexity Maturity",
+        "prompt": "thirteen/complexity-maturity.md",
+    },
+    {
+        "name": "invest_maturity",
+        "display": "INVEST Maturity",
+        "prompt": "thirteen/invest-maturity.md",
+    },
+]
+
+# Aggregator formula: sum of all 10 functional dimension scores (as bindings)
+AGGREGATOR_FORMULA = " + ".join(f"dim_{d['name']}" for d in FUNCTIONAL_DIMENSIONS)
+
 
 class BCPCalculator:
     """
-    Calculator for Business Complexity Points (BCP) of user stories.
+    Calculator for Business Complexity Points (BCP) using the 13-dimensions
+    decomposed pipeline (V2).
     """
-    
-    def __init__(self, logger: logging.Logger, provider_name: str = "openai", prompt_handler: PromptHandler | None = None):
+
+    def __init__(
+        self,
+        logger: logging.Logger,
+        provider_name: str = "openai",
+        prompt_handler: PromptHandler | None = None,
+        max_workers: int = 5,
+    ):
         """
         Initialize the BCP calculator.
-        
+
         Args:
             logger: The logger instance
-            provider_name: The name of the LLM provider to use ('openai' or 'claude')
-            prompt_handler: Optional PromptHandler to enable dependency injection for testing
+            provider_name: The name of the LLM provider to use
+            prompt_handler: Optional PromptHandler for dependency injection (testing)
+            max_workers: Maximum number of parallel threads per wave
         """
         self.logger = logger
         self.provider_name = provider_name
         self.prompt_handler = prompt_handler or PromptHandler(logger, provider_name=provider_name)
-        
-        # Define the steps in the BCP calculation process
-        self.steps = [
-            {
-                "name": "Non Functional Detector",
-                "prompt_file": "step0_flow_bcp_non_functional_detector.jinja2",
-                "required": False  # Not used for BCP calculation, but for additional analysis
-            },
-            {
-                "name": "Story Maturity Complexity",
-                "prompt_file": "step1_flow_story_maturity_complexity.jinja2",
-                "required": False  # Not used for BCP calculation, but for additional analysis
-            },
-            {
-                "name": "Story INVEST Maturity",
-                "prompt_file": "step2_flow_story_invest_maturity.jinja2",
-                "required": False  # Not used for BCP calculation, but for additional analysis
-            },
-            {
-                "name": "Break Elements",
-                "prompt_file": "step3_flow_bcp_break_elements.jinja2",
-                "required": True  # Required for BCP calculation
-            },
-            {
-                "name": "External Integrations Complexity",
-                "prompt_file": "step4_flow_bcp_boundaries.jinja2",
-                "required": True  # Required for BCP calculation
-            },
-            {
-                "name": "UI Elements Complexity",
-                "prompt_file": "step5_flow_bcp_interface_elements.jinja2",
-                "required": True  # Required for BCP calculation
-            },
-            {
-                "name": "Business Rules Complexity",
-                "prompt_file": "step6_flow_bcp_business_rule.jinja2",
-                "required": True  # Required for BCP calculation
-            }
-        ]
-    
+        self.formula_evaluator = FormulaEvaluator(logger)
+        self.max_workers = max_workers
+
     def calculate_bcp(self, story_content: str) -> Dict[str, Any]:
         """
-        Calculate the Business Complexity Points (BCP) for a user story.
-        
+        Calculate the Business Complexity Points (BCP) for a user story
+        using the 13-dimensions decomposed pipeline.
+
         Args:
             story_content: The content of the user story
-            
+
         Returns:
-            A dictionary containing the results of each step and the final BCP
+            A dictionary containing cell results, dimension breakdown,
+            maturity scores, and the total BCP
         """
-        self.logger.info("Starting BCP calculation")
-        
-        # Extract story name from content (assuming first line is the title)
-        story_lines = story_content.strip().split('\n')
-        story_name = story_lines[0] if story_lines else "Unnamed Story"
-        
-        # Initialize results dictionary
-        results = {
+        self.logger.info("Starting BCP 13-dimensions calculation")
+
+        story_lines = story_content.strip().split("\n")
+        story_name = story_lines[0].strip() if story_lines else "Unnamed Story"
+
+        story_vars = PromptHandler.prepare_story_variables(story_content)
+
+        results: Dict[str, Any] = {
             "story_name": story_name,
-            "steps": {},
+            "cells": {},
             "breakdown": {},
-            "total_bcp": 0
+            "maturity": {},
+            "total_bcp": 0,
         }
-        
-        # Process each step
-        elements = None
-        
-        for step in self.steps:
-            step_name = step["name"]
-            step_logger = StepLogger(self.logger, step_name)
-            step_logger.info(f"Processing step: {step_name}")
-            
-            try:
-                # Prepare variables for the prompt
-                variables = {"story": story_content, "storyName": story_name}
-                response = {}
-                
-                # For steps 4-6, we need the output from step 3
-                if step["name"] == "External Integrations Complexity" and elements:
-                    # Extract all instances from elements['Integrations (Boundaries)'] and set as comma-separated string
-                    variables["elements"] = ""
-                    if isinstance(elements, dict) and "Integrations (Boundaries)" in elements:
-                        boundaries = elements["Integrations (Boundaries)"]
-                        if isinstance(boundaries, list):
-                            variables["elements"] = ", ".join(str(b) for b in boundaries)
-                        else:
-                            variables["elements"] = str(boundaries)
-                    step_logger.debug(f"Using boundaries section: {variables['elements']}")
-                    # If no elements found, set default response
-                    if not variables["elements"]:
-                        response = [{
-                            "Boundary": 1,
-                            "Summary": "There is no external integration detected",
-                            "Size": "XS"
-                        }]
-                
-                elif step["name"] == "UI Elements Complexity" and elements:
-                    # Extract interface elements section from elements
-                    variables["elements"] = ""
-                    if isinstance(elements, dict):
-                        interface_elements = {}                        
-                        if "User View" in elements:
-                            interface_elements['User View'] = elements.get('User View')
-                        if "Acceptance Criteria" in elements:
-                            interface_elements['Acceptance Criteria'] = ", ".join(str(b) for b in elements["Acceptance Criteria"])
-                        if "Test Plan" in elements:
-                            interface_elements['Test Plan'] = elements.get('Test Plan')
-                        variables["elements"] = json.dumps(interface_elements, ensure_ascii=False, indent=2).replace("'", "").replace('"', "")
-                    step_logger.debug(f"Using interface section: {variables['elements']}")
-                    # If no elements found, set default response
-                    if not variables["elements"]:
-                        response = {
-                            "step": "Interface",
-                            "description": "There is no interface elements detected",
-                            "total": 0
-                        }
-                
-                elif step["name"] == "Business Rules Complexity" and elements:
-                    # Extract business rules section from elements
-                    variables["elements"] = ""
-                    if isinstance(elements, dict):
-                        business_elements = {}                        
-                        if "Business Narrative" in elements:
-                            business_elements['Business Narrative'] = elements.get('Business Narrative')
-                        if "Requirements and Business Rules" in elements:
-                            business_elements['Requirements and Business Rules'] = elements.get('Requirements and Business Rules')
-                        if "Test Plan" in elements:
-                            business_elements['Test Plan'] = elements.get('Test Plan')
-                        variables["elements"] = json.dumps(business_elements, ensure_ascii=False, indent=2).replace("'", "").replace('"', "")
-                    step_logger.debug(f"Using business section: {variables['elements']}")
-                    # If no elements found, set default response
-                    if not variables["elements"]:
-                        response = {
-                            "step": "Business",
-                            "description": "There is no logical rules detected",
-                            "total": 0
-                        }
 
-                # Process the prompt, if response is not set
-                if not response:
-                    response = self.prompt_handler.process_prompt(step["prompt_file"], variables)
-                step_logger.info(f"Step completed successfully")
-                
-                # Store the result
-                results["steps"][step_name] = response
-                
-                # If this is step 3, store the elements for later steps
-                if step["name"] == "Break Elements":
-                    #elements = response.get("raw_response", "")
-                    elements = response
-                
-                # If this is a required step (4-6), add to BCP calculation
-                if step["required"] and step["name"] != "Break Elements":
-                    step_logger.debug(f"Response:\n {json.dumps(response, ensure_ascii=False)}")
-                    total_bcp = 0
-                    
-                    # Check if response is a string, which indicates parsing error
-                    if isinstance(response, str):
-                        step_logger.warning(f"Response is a string, not a parsed object: {response}")
-                        response = {"raw_response": response}
-                    
-                    if isinstance(response, dict) and "raw_response" in response:
-                        step_logger.warning("Using raw_response as fallback")
-                        # Skip BCP calculation for this step
-                        continue
-                        
-                    match step["name"]:
-                        case "External Integrations Complexity":
-                            # Make sure response is a list
-                            if not isinstance(response, list):
-                                step_logger.warning(f"Expected list for boundaries but got {type(response)}")
-                                continue
-                                
-                            for boundary in response:
-                                if isinstance(boundary, dict):
-                                    boundary_size = boundary.get("Size", "")
-                                    match boundary_size:
-                                        case "XS":
-                                            total_bcp += 1
-                                        case "S":
-                                            total_bcp += 2
-                                        case "M":
-                                            total_bcp += 3
-                                        case "XL":
-                                            total_bcp += 8
-                        case "UI Elements Complexity":
-                            # Make sure response is a dict
-                            if not isinstance(response, dict):
-                                step_logger.warning(f"Expected dict for UI Elements but got {type(response)}")
-                                continue
-                                
-                            total_bcp += math.ceil(response.get("Static", 0) / 5) * 3
-                            total_bcp += math.ceil(response.get("Dynamic", 0) / 5) * 5
-                        case "Business Rules Complexity":
-                            # Make sure response is a list
-                            if not isinstance(response, list):
-                                step_logger.warning(f"Expected list for Business Rules but got {type(response)}")
-                                continue
-                                
-                            for rule in response:
-                                if isinstance(rule, dict):
-                                    total_bcp += rule.get("Score", 0)
+        # --- Wave 1: 10 functional cells + NFR cell (parallel) ---
+        wave1_cells = [
+            (f"functional_{d['name']}", d["display"], d["prompt"], d["formula"])
+            for d in FUNCTIONAL_DIMENSIONS
+        ]
+        wave1_cells.append(
+            (NFR_CELL["name"], NFR_CELL["display"], NFR_CELL["prompt"], NFR_CELL["formula"])
+        )
 
-                    if total_bcp > 0:
-                        component_name = step["name"].replace(" Complexity", "")
-                        results["breakdown"][component_name] = total_bcp
-                        results["total_bcp"] += total_bcp
-                    else:
-                        step_logger.warning(f"No BCP value found in response: {response}")
+        wave1_results = self._execute_wave(
+            wave1_cells, story_vars, bindings=None, wave_name="Wave 1"
+        )
 
-            except Exception as e:
-                step_logger.error(f"Error processing step: {str(e)}")
-                results["steps"][step_name] = {"error": str(e)}
-                
-                # If this is a required step and it failed, we can't calculate the BCP
-                if step["required"]:
-                    self.logger.error("Required step failed, cannot calculate BCP")
-                    results["error"] = f"Failed to calculate BCP: {str(e)}"
-                    return results
-        
-        self.logger.info(f"BCP calculation completed. Total BCP: {results['total_bcp']}")
+        results["cells"].update(wave1_results["cells"])
+
+        # Extract functional scores for aggregator bindings
+        aggregator_bindings: Dict[str, Any] = {}
+        functional_scores: Dict[str, float] = {}
+        for d in FUNCTIONAL_DIMENSIONS:
+            cell_name = f"functional_{d['name']}"
+            cell_result = wave1_results["cells"].get(cell_name, {})
+            score = cell_result.get("score", 0)
+            aggregator_bindings[f"dim_{d['name']}"] = score
+            functional_scores[d["name"]] = score
+
+        nfr_result = wave1_results["cells"].get("nfr_scoring", {})
+        nfr_score = nfr_result.get("score", 0)
+
+        # Populate breakdown from Wave 1
+        for d in FUNCTIONAL_DIMENSIONS:
+            results["breakdown"][d["name"]] = functional_scores.get(d["name"], 0)
+        results["breakdown"]["nfr"] = nfr_score
+
+        # --- Wave 2: aggregator cell (depends on 10 functional scores) ---
+        aggregator_result = self._execute_cell(
+            cell_name=AGGREGATOR_CELL["name"],
+            display_name=AGGREGATOR_CELL["display"],
+            prompt_file=AGGREGATOR_CELL["prompt"],
+            story_vars=story_vars,
+            bindings=aggregator_bindings,
+            formula=AGGREGATOR_FORMULA,
+            is_aggregator=True,
+        )
+
+        results["cells"][AGGREGATOR_CELL["name"]] = aggregator_result
+        aggregator_score = aggregator_result.get("score", 0)
+
+        # --- Wave 3: 2 maturity cells (depend on aggregator + NFR) ---
+        maturity_bindings: Dict[str, Any] = {
+            "functional_scoring": json.dumps(aggregator_result.get("raw_output", {}), ensure_ascii=False),
+            "nfr_scoring": json.dumps(nfr_result.get("raw_output", {}), ensure_ascii=False),
+        }
+
+        wave3_cells = [
+            (mc["name"], mc["display"], mc["prompt"], None) for mc in MATURITY_CELLS
+        ]
+        wave3_results = self._execute_wave(
+            wave3_cells, story_vars, bindings=maturity_bindings, wave_name="Wave 3"
+        )
+
+        results["cells"].update(wave3_results["cells"])
+
+        for mc in MATURITY_CELLS:
+            cell_result = wave3_results["cells"].get(mc["name"], {})
+            score = cell_result.get("score", 0)
+            maturity_key = "complexity" if "complexity" in mc["name"] else "invest"
+            results["maturity"][maturity_key] = score
+
+        # --- Total BCP ---
+        results["total_bcp"] = aggregator_score + nfr_score
+
+        self.logger.info(
+            f"BCP 13-dimensions calculation completed. "
+            f"Total BCP: {results['total_bcp']} "
+            f"(functional: {aggregator_score}, nfr: {nfr_score})"
+        )
         return results
-    
-    def _extract_section(self, elements_text: str, section_number: int) -> str:
+
+    def _execute_wave(
+        self,
+        cells: List[tuple],
+        story_vars: Dict[str, Any],
+        bindings: Optional[Dict[str, Any]],
+        wave_name: str,
+    ) -> Dict[str, Any]:
         """
-        Extract a specific section from the elements text.
-        
+        Execute a wave of cells in parallel using ThreadPoolExecutor.
+
         Args:
-            elements_text: The text containing all elements
-            section_number: The section number to extract (1=Business Rules, 2=Interface, 3=External)
-            
+            cells: List of (name, display, prompt_file, formula) tuples
+            story_vars: Story variables dict
+            bindings: Optional binding values to inject into prompts
+            wave_name: Name for logging
+
         Returns:
-            The extracted section text
+            Dict with 'cells' key containing results per cell name
         """
-        sections = elements_text.split("<-->")
-        
-        if len(sections) >= section_number:
-            return sections[section_number - 1].strip()
-        else:
-            self.logger.warning(f"Section {section_number} not found in elements text")
-            return ""
+        self.logger.info(f"{wave_name}: executing {len(cells)} cells in parallel")
+        wave_results: Dict[str, Any] = {"cells": {}}
+
+        with ThreadPoolExecutor(max_workers=min(self.max_workers, len(cells))) as executor:
+            futures = {}
+            for cell_name, display_name, prompt_file, formula in cells:
+                future = executor.submit(
+                    self._execute_cell,
+                    cell_name=cell_name,
+                    display_name=display_name,
+                    prompt_file=prompt_file,
+                    story_vars=story_vars,
+                    bindings=bindings,
+                    formula=formula,
+                )
+                futures[future] = cell_name
+
+            for future in as_completed(futures):
+                cell_name = futures[future]
+                try:
+                    result = future.result()
+                    wave_results["cells"][cell_name] = result
+                    step_logger = StepLogger(self.logger, cell_name)
+                    step_logger.info(
+                        f"Completed with score: {result.get('score', 'N/A')}"
+                    )
+                except Exception as e:
+                    self.logger.error(f"{wave_name} — cell '{cell_name}' failed: {str(e)}")
+                    wave_results["cells"][cell_name] = {
+                        "score": 0,
+                        "raw_output": {"error": str(e)},
+                    }
+
+        return wave_results
+
+    def _execute_cell(
+        self,
+        cell_name: str,
+        display_name: str,
+        prompt_file: str,
+        story_vars: Dict[str, Any],
+        bindings: Optional[Dict[str, Any]] = None,
+        formula: Optional[str] = None,
+        is_aggregator: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Execute a single pipeline cell: load prompt, render, invoke LLM, parse, score.
+
+        Args:
+            cell_name: Unique cell identifier
+            display_name: Human-readable name
+            prompt_file: Relative path to the prompt template
+            story_vars: Story variables dict
+            bindings: Optional binding values for the prompt template
+            formula: Optional scoreFormula to evaluate against the LLM output
+            is_aggregator: If True, use bindings directly as the score source
+                           (aggregator already has scores in its output from bindings)
+
+        Returns:
+            Dict with 'score' (number) and 'raw_output' (parsed LLM response)
+        """
+        step_logger = StepLogger(self.logger, cell_name)
+        step_logger.info(f"Processing cell: {display_name}")
+
+        # For the aggregator, bindings are injected as Jinja2 variables in the prompt
+        # The prompt template uses {{dim_business_rules}} etc.
+        prompt_bindings = bindings if is_aggregator else bindings
+
+        raw_output = self.prompt_handler.process_prompt(
+            prompt_file=prompt_file,
+            variables=story_vars,
+            bindings=prompt_bindings,
+        )
+
+        # Evaluate score
+        score = 0
+        if formula:
+            try:
+                if is_aggregator:
+                    # Aggregator: evaluate formula using binding values
+                    score = self.formula_evaluator.evaluate(
+                        formula=formula, output={}, bindings=bindings or {}
+                    )
+                else:
+                    score = self.formula_evaluator.evaluate(
+                        formula=formula, output=raw_output, bindings=bindings or {}
+                    )
+            except Exception as e:
+                step_logger.warning(f"Score formula evaluation failed: {str(e)}")
+                # Try to get score directly from the output
+                if isinstance(raw_output, dict) and "score" in raw_output:
+                    score = raw_output["score"]
+                    step_logger.info(f"Using 'score' field from output: {score}")
+        elif isinstance(raw_output, dict) and "score" in raw_output:
+            score = raw_output["score"]
+
+        step_logger.info(f"Cell completed. Score: {score}")
+        return {"score": score, "raw_output": raw_output}

@@ -20,3 +20,7 @@ Initial tech requirements:
  - Use OpenAI as the provider for the models and the GPT-4o as the model to be leveraged
  - Create proper logging so we can understand the steps and decisions of the application
 
+---
+
+> **Historical note:** This was the original project brief that started the bcp-agent. The project has since evolved from the 3-dimension model (6 sequential steps described above) to the **13-dimensions decomposed pipeline** (14 cells in 3 parallel waves: 10 functional dimensions + 3 NFR + 2 maturity evaluations). The original `.jinja2` prompts have been replaced by `.md` prompts in `src/bcp/prompts/thirteen/`. This document is preserved for historical context only — see `README.md` for current architecture.
+

@@ -18,15 +18,15 @@ Before using the MCP server, make sure you have:
    Then edit the `.env` file to add your API keys for the providers you want to use. Supported providers:
    - OpenAI: set OPENAI_API_KEY and optional OPENAI_MODEL_NAME
    - Anthropic (Claude): set ANTHROPIC_API_KEY and optional ANTHROPIC_MODEL_NAME
-   - Flow OpenAI: set FLOW_BASE_URL, FLOW_CLIENT_ID, FLOW_CLIENT_SECRET, optional FLOW_TENANT, FLOW_AGENT, FLOW_MODEL_NAME
-   - Flow Bedrock: set FLOW_BASE_URL, FLOW_CLIENT_ID, FLOW_CLIENT_SECRET, optional FLOW_TENANT, FLOW_AGENT, FLOW_BEDROCK_MODEL_NAME, FLOW_BEDROCK_MAX_TOKENS, FLOW_BEDROCK_TEMPERATURE
+   - Flow OpenAI (flow-openai): set FLOW_LLM_LITE_HOST, FLOW_LITELLM_CLIENT_ID, FLOW_LITELLM_CLIENT_SECRET, FLOW_LITELLM_SCOPE, optional FLOW_TENANT, FLOW_AGENT, FLOW_LITELLM_MODEL_NAME
+   - Flow Bedrock: set FLOW_CLIENT_ID, FLOW_CLIENT_SECRET, FLOW_BASE_URL, optional FLOW_BEDROCK_MODEL_NAME, FLOW_BEDROCK_TEMPERATURE
 
 ## Starting the MCP Server (stdio)
 
 You can start the MCP server locally using stdio transport:
 
 ```bash
-python run_mcp_server.py
+python run_mcp.py
 ```
 
 This mode is useful for desktop clients that spawn the server process.
@@ -53,7 +53,7 @@ Configure MCP clients (e.g., continue.dev) to call the BCP tool via stdio:
     "bcp": {
         "command": "~/cit/flow/github/flow-ciandt/bcp-agent/venv/bin/python",
         "args": [
-            "~/cit/flow/github/flow-ciandt/bcp-agent/run_mcp_server.py"
+            "~/cit/flow/github/flow-ciandt/bcp-agent/run_mcp.py"
         ],
         "env": {
             "OPENAI_API_KEY": "${OPENAI_API_KEY}"

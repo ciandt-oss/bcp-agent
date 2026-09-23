@@ -137,12 +137,19 @@ celerybeat.pid
 # Environments
 .env
 .envrc
-.venv
 env/
-venv/
 ENV/
 env.bak/
+
+# Python virtual environments
+.venv/
+venv/
+.venv-test/
+venv-test/
 venv.bak/
+__pycache__/
+*.pyc
+
 
 # Spyder project settings
 .spyderproject

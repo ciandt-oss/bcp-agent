@@ -1,14 +1,11 @@
 from typing import Any
-import httpx
-from mcp.server.fastmcp import FastMCP
-import uuid
+from mcp.server.mcpserver import MCPServer
 import logging
 
 from src.bcp.bcp_calculator import BCPCalculator
 from src.bcp.logger import setup_logger
 
-# Initialize FastMCP server
-mcp = FastMCP("bcp-calculator-mcp")
+mcp = MCPServer("bcp-calculator-mcp")
 
 logger = setup_logger(logging.INFO)
 
@@ -18,9 +15,8 @@ async def calculate_bcp(story_content: str, provider: str = "openai") -> dict:
 
     Args:
         story: User story content
-        provider: LLM provider to use (openai or claude)
+        provider: LLM provider to use (openai, claude, flow-openai, flow-bedrock)
     """
-    """Start BCP calculation job."""
     calculator = BCPCalculator(logger, provider_name=provider)
     result = calculator.calculate_bcp(story_content)
 

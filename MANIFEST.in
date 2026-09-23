@@ -1,5 +1,5 @@
-# Include prompt templates
-include src/bcp/prompts/*.jinja2
+# Include prompt templates (13-dimensions pipeline)
+recursive-include src/bcp/prompts/thirteen *.md
 
 # Include documentation
 include README.md
