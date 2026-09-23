@@ -203,25 +203,23 @@ class FlowLiteLLMChatModel(BaseChatModel):
             headers["FlowTenant"] = flow_tenant
         if flow_agent:
             headers["FlowAgent"] = flow_agent
-
+        headers["FlowChannel"] = "bcp"
         if api_key:
-            headers["FlowToken"] = api_key
+            headers["Authorization"] = f"Bearer {api_key}"
 
         url = f"{base_url}/v1/chat/completions"
 
         model_lower = model_name.lower()
         if "gpt-5" in model_lower or "nano" in model_lower:
             payload = {
-                "stream": False,
-                "allowedModels": [model_name],
+                "model": model_name,
                 "messages": flow_messages,
             }
         else:
             payload = {
-                "stream": False,
+                "model": model_name,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
-                "allowedModels": [model_name],
                 "messages": flow_messages,
             }
 
@@ -252,9 +250,8 @@ class FlowLiteLLMChatModel(BaseChatModel):
 class FlowLiteLLMProvider(LLMProvider):
     """Flow LiteLLM proxy provider implementation.
 
-    Uses the FlowLiteLLM proxy instead of the legacy AI Orchestrator.
-    Auth token is obtained via Azure AD B2C OAuth2 client_credentials grant
-    (NOT auth-engine-api). The token is a JWT sent as FlowToken header.
+    Uses the FlowLiteLLM proxy with a JWT token sent as Authorization: Bearer header.
+    The token is provided via FLOW_LITELLM_TOKEN_JWT env var.
     """
 
     def __init__(self,
@@ -278,57 +275,14 @@ class FlowLiteLLMProvider(LLMProvider):
         self.base_url = os.environ.get("FLOW_LLM_LITE_HOST")
         self.flow_tenant = os.environ.get("FLOW_TENANT", "flowteam")
         self.flow_agent = os.environ.get("FLOW_AGENT", "bcp-opensource")
-        self.api_key = self._get_m2m_token()
+        self.api_key = os.environ.get("FLOW_LITELLM_TOKEN_JWT", "")
         self.logger.info(f"Initialized Flow LiteLLM provider with model {model_name}")
 
-    def _get_m2m_token(self) -> str:
-        """
-        Retrieve an Azure AD B2C M2M token via OAuth2 client_credentials grant.
-
-        Uses B2C_TENANT, CLIENT_ID, CLIENT_SECRET, and the flow-litellm scope
-        URI from FLOW_LITELLM_SCOPE (or ACCESS_SCOPES JSON)..
-
-        Returns:
-            The Azure B2C JWT access token
-        """
-        b2c_tenant = os.environ.get("B2C_TENANT", "citflowdevb2c.onmicrosoft.com")
-        client_id = os.environ.get("FLOW_LITELLM_CLIENT_ID", os.environ.get("CLIENT_ID"))
-        client_secret = os.environ.get("FLOW_LITELLM_CLIENT_SECRET", os.environ.get("CLIENT_SECRET"))
-
-        scope_uri = os.environ.get("FLOW_LITELLM_SCOPE")
-        if not scope_uri:
-            access_scopes_json = os.environ.get("ACCESS_SCOPES", "{}")
-            try:
-                scopes = json.loads(access_scopes_json)
-                scope_uri = scopes.get("flow-litellm")
-            except (json.JSONDecodeError, AttributeError):
-                pass
-
-        if not scope_uri:
+        if not self.api_key:
             raise RuntimeError(
-                "FLOW_LITELLM_SCOPE env var not set and 'flow-litellm' key not found "
-                "in ACCESS_SCOPES. Set FLOW_LITELLM_SCOPE to the Azure B2C scope URI "
-                "for the flow-litellm app registration (e.g., "
-                "https://citflowdevb2c.onmicrosoft.com/citflowdev_app_flow-litellm_sys_sa/.default)"
+                "FLOW_LITELLM_TOKEN_JWT env var not set. "
+                "Provide the JWT token for the Flow LiteLLM proxy."
             )
-
-        token_url = f"https://login.microsoftonline.com/{b2c_tenant}/oauth2/v2.0/token"
-
-        payload = {
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "scope": scope_uri,
-        }
-
-        try:
-            response = requests.post(token_url, data=payload)
-            response.raise_for_status()
-            data = response.json()
-        except Exception as e:
-            raise RuntimeError(f"Error calling Azure B2C token endpoint: {str(e)}")
-
-        return data.get("access_token")
 
     def get_model(self) -> BaseLanguageModel:
         """
