@@ -21,6 +21,7 @@ The BCP Calculator analyzes user stories and calculates their Business Complexit
 10. Audits
 
 **3 NFR (Non-Functional Requirements) dimensions:**
+
 11. Quality Attributes
 12. Security & Compliance
 13. User Experience & Accessibility
