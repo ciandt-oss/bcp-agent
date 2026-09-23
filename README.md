@@ -73,7 +73,19 @@ The recommended model is `mistral-small-2503` with `temperature=0`. This combina
    cp .env.example .env
    ```
    
-   Then edit the `.env` file to add your API keys for the providers you want to use (OpenAI and/or Anthropic).
+   Then edit the `.env` file to add your API keys for the providers you want to use.
+
+   Provider-specific example files are also available:
+   - `.env.llm-provider.example` — LLM local gateway (no API key needed)
+   - `.env.openai.example` — OpenAI direct (api.openai.com)
+   - `.env.anthropic.example` — Anthropic Claude
+   - `.env.flow.example` — Flow OpenAI (LiteLLM proxy, JWT token)
+   - `.env.flow-bedrock.example` — Flow Bedrock
+
+   Copy the one that matches your setup, e.g.:
+   ```
+   cp .env.flow.example .env
+   ```
 
 ## LLM Providers
 
