@@ -111,16 +111,18 @@ The langchain-based providers (`OpenAIProvider`, `ClaudeProvider`, `FlowLiteLLMP
 
 ### OpenAI (`--provider openai`)
 
-Connects directly to the OpenAI API using `langchain-openai`.
+Uses `SimpleLLMProvider` (httpx-based) to connect to any OpenAI-compatible endpoint. This is the default provider.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `OPENAI_API_KEY` | Yes | — | Your OpenAI API key |
+| `OPENAI_API_KEY` | Yes | — | Your OpenAI API key (or placeholder for local gateways) |
+| `OPENAI_BASE_URL` | No | `https://api.openai.com/v1` | Base URL for the endpoint (use for local gateways, Ollama, etc.) |
 | `OPENAI_MODEL_NAME` | No | `mistral-small-2503` | Model to use |
 
 **.env example:**
 ```env
 OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL_NAME=mistral-small-2503
 ```
 
@@ -138,11 +140,13 @@ Connects directly to the Anthropic API using `langchain-anthropic`.
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | — | Your Anthropic API key |
+| `ANTHROPIC_BASE_URL` | No | `https://api.anthropic.com` | Base URL (use for proxies or Anthropic-compatible endpoints) |
 | `ANTHROPIC_MODEL_NAME` | No | `mistral-small-2503` | Model to use |
 
 **.env example:**
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_BASE_URL=https://api.anthropic.com
 ANTHROPIC_MODEL_NAME=mistral-small-2503
 ```
 
@@ -155,17 +159,12 @@ python run_cli.py story.md --provider claude
 
 ### Flow OpenAI (`--provider flow-openai`)
 
-> **Note:** This is the langchain-based provider (`FlowLiteLLMProvider`). For Flow gateway usage, `SimpleLLMProvider` (the default `openai` provider) is recommended instead.
-
-Routes requests through [CI&T Flow](https://flow.ciandt.com)'s LiteLLM proxy. Authenticates via Azure AD B2C OAuth2 client_credentials grant (the token is sent as a `FlowToken` header).
+Routes requests through [CI&T Flow](https://flow.ciandt.com)'s LiteLLM proxy. Authenticates using a JWT token sent as `Authorization: Bearer` header.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `FLOW_LLM_LITE_HOST` | Yes | — | Flow LiteLLM proxy URL (e.g. `https://flow.ciandt.com/flow-litellm`) |
-| `B2C_TENANT` | No | `citflowdevb2c.onmicrosoft.com` | Azure B2C tenant |
-| `FLOW_LITELLM_CLIENT_ID` | Yes* | — | Azure B2C app registration client ID (*falls back to `CLIENT_ID`) |
-| `FLOW_LITELLM_CLIENT_SECRET` | Yes* | — | Azure B2C app registration client secret (*falls back to `CLIENT_SECRET`) |
-| `FLOW_LITELLM_SCOPE` | Yes** | — | Azure B2C scope URI for flow-litellm app registration (**or via `ACCESS_SCOPES` JSON with `flow-litellm` key) |
+| `FLOW_LITELLM_TOKEN_JWT` | Yes | — | JWT token for the LiteLLM proxy (sent as `Authorization: Bearer`) |
 | `FLOW_TENANT` | No | `flowteam` | Tenant identifier sent in the `FlowTenant` header |
 | `FLOW_AGENT` | No | `bcp-opensource` | Agent identifier sent in the `FlowAgent` header |
 | `FLOW_LITELLM_MODEL_NAME` | No | `mistral-small-2503` | Model to use |
@@ -175,11 +174,8 @@ Routes requests through [CI&T Flow](https://flow.ciandt.com)'s LiteLLM proxy. Au
 **.env example:**
 ```env
 FLOW_LLM_LITE_HOST=https://flow.ciandt.com/flow-litellm
-B2C_TENANT=citflowdevb2c.onmicrosoft.com
-FLOW_LITELLM_CLIENT_ID=my-client-id
-FLOW_LITELLM_CLIENT_SECRET=my-client-secret
-FLOW_LITELLM_SCOPE=https://citflowdevb2c.onmicrosoft.com/citflowdev_app_flow-litellm_sys_sa/.default
-FLOW_TENANT=myteam
+FLOW_LITELLM_TOKEN_JWT=your_jwt_token_here
+FLOW_TENANT=flowteam
 FLOW_AGENT=bcp-opensource
 FLOW_LITELLM_MODEL_NAME=mistral-small-2503
 ```
@@ -276,7 +272,7 @@ The output includes:
 ### Core Application Files
 - `run_cli.py`: Entry point wrapper for the CLI application
 - `run_api_server.py`: HTTP API server launcher
-- `run_mcp_server.py`: MCP server launcher (stdio)
+- `run_mcp.py`: MCP server launcher (stdio)
 - `run_mcp_http_server.py`: MCP server launcher (HTTP)
 - `run_comparison.py`: Tool for comparing BCP results between different providers
 - `src/main.py`: Main CLI implementation
