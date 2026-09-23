@@ -17,7 +17,7 @@ The Business Complexity Points (BCP) Agent is a command-line tool that helps cal
 
 3. Set up your environment variables:
    ```
-   cp .env.example .env
+   cp .env.flow.example .env
    ```
 
 4. Edit the `.env` file to add your API keys:

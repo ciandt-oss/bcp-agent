@@ -18,7 +18,7 @@ Before using the SDK, make sure you have:
 
 2. Set up your environment variables:
    ```bash
-   cp .env.example .env
+   cp .env.flow.example .env
    ```
    Then edit the `.env` file to add your API keys for the providers you want to use (OpenAI and/or Anthropic).
 

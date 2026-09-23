@@ -70,7 +70,7 @@ The recommended model is `mistral-small-2503` with `temperature=0`. This combina
 
 3. Set up your environment variables:
    ```
-   cp .env.example .env
+   cp .env.flow.example .env
    ```
    
    Then edit the `.env` file to add your API keys for the providers you want to use.
