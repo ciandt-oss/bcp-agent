@@ -195,7 +195,7 @@ The BCP Calculator can be used in five different ways:
 2. **[HTTP API](docs/usage/http_api_usage.md)** - Run as a RESTful API service
 3. **[Model Context Protocol (MCP)](docs/usage/mcp_usage.md)** - Use with any MCP client (stdio or streamable HTTP)
 4. **[Python SDK](docs/usage/sdk_usage.md)** - Import and use as a Python library
-5. **[MCP Server](docs/usage/mcp_usage.md)** - Run the MCP as a standalone server (stdio or HTTP transport)
+5. **[Standalone Skill](#standalone-skill)** - Claude Code skill that runs without any API or SDK (see section below)
 
 Choose the integration option that best fits your workflow. Click the links above for detailed usage instructions for each option.
 
