@@ -29,8 +29,8 @@ def mock_response():
 # --- Initialization ---
 
 def test_init_defaults(logger):
-    provider = SimpleLLMProvider(logger, model="mistral-small-2503")
-    assert provider.model == "mistral-small-2503"
+    provider = SimpleLLMProvider(logger, model="gpt-6-luna")
+    assert provider.model == "gpt-6-luna"
     assert provider.temperature == 0
     assert provider.max_tokens == 4096
     assert provider.timeout == 300
@@ -89,7 +89,7 @@ def test_should_not_send_auth_with_none_key(logger, monkeypatch):
 @patch("bcp.simple_llm_provider.httpx.post")
 def test_invoke_returns_response_text(mock_post, logger, mock_response):
     mock_post.return_value = mock_response
-    provider = SimpleLLMProvider(logger, model="mistral-small-2503", base_url="http://localhost:8080/v1", api_key="test-key")
+    provider = SimpleLLMProvider(logger, model="gpt-6-luna", base_url="http://localhost:8080/v1", api_key="test-key")
     result = provider.invoke("Test prompt")
     assert result == "LLM response text"
 
@@ -108,7 +108,7 @@ def test_invoke_sends_auth_header_with_real_key(mock_post, logger, mock_response
 @patch("bcp.simple_llm_provider.httpx.post")
 def test_invoke_omits_auth_header_with_placeholder_key(mock_post, logger, mock_response):
     mock_post.return_value = mock_response
-    provider = SimpleLLMProvider(logger, model="mistral-small-2503", base_url="http://localhost:8080/v1", api_key="test-key")
+    provider = SimpleLLMProvider(logger, model="gpt-6-luna", base_url="http://localhost:8080/v1", api_key="test-key")
     provider.invoke("Test prompt")
     call_kwargs = mock_post.call_args
     headers = call_kwargs.kwargs.get("headers", {})
@@ -118,11 +118,11 @@ def test_invoke_omits_auth_header_with_placeholder_key(mock_post, logger, mock_r
 @patch("bcp.simple_llm_provider.httpx.post")
 def test_invoke_sends_correct_payload(mock_post, logger, mock_response):
     mock_post.return_value = mock_response
-    provider = SimpleLLMProvider(logger, model="mistral-small-2503", base_url="http://localhost:8080/v1", api_key="test-key", temperature=0, max_tokens=2048)
+    provider = SimpleLLMProvider(logger, model="gpt-6-luna", base_url="http://localhost:8080/v1", api_key="test-key", temperature=0, max_tokens=2048)
     provider.invoke("My prompt text")
     call_kwargs = mock_post.call_args
     json_payload = call_kwargs.kwargs.get("json", {})
-    assert json_payload["model"] == "mistral-small-2503"
+    assert json_payload["model"] == "gpt-6-luna"
     assert json_payload["messages"] == [{"role": "user", "content": "My prompt text"}]
     assert json_payload["temperature"] == 0
     assert json_payload["max_tokens"] == 2048

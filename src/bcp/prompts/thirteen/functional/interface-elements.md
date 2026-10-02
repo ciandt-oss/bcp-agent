@@ -30,6 +30,24 @@ Do NOT count:
 
 **Important:** Do NOT skip a story just because the title says "Spike", "POC", or "Research". Always read the full description first — if user-facing interface elements are described, score them normally. Only output empty arrays when the description genuinely contains NO user-facing interface elements.
 
+### Step 0.5 — Verbatim Evidence Rule (Determinism Anchor)
+
+Your include/exclude decision must be anchored to text you can literally point to, never to the story's title, ticket type, or general tone.
+
+- **Before including an element**: you must be able to identify a specific phrase in the description that names or clearly implies a user-facing element (something a user sees or interacts with). If you cannot point to such a phrase, do not include it.
+- **Before concluding "no elements"**: scan the ENTIRE description (not just the title or first sentence) for concrete UI nouns/verbs (screen, form, field, button, modal, tooltip, icon, banner, tab, dropdown, filter, notification, spinner, badge, etc.) used in a user-facing sense. Do not default to empty arrays just because the story is framed as technical, a spike, a migration, or a backend task — a technical-sounding story can still contain one real UI element buried in the description.
+- **Watch for false positives**: a UI-sounding word does not always describe a real interface element. Words like "screen" (e.g., "screen resolution" as a data attribute), "form" (e.g., "data form" meaning a payload/schema), or "view" (e.g., a database view) may be used in a non-UI, technical sense. Verify the word describes something a user actually sees or interacts with before counting it.
+- If, after this scan, at least one element has clear textual support, you MUST include it — do not omit it due to ambiguity elsewhere in the story. If none has textual support, output empty arrays with confidence.
+
+### Step 0.75 — Binary Relevance Gate (Mechanical, Single-Pass Decision)
+
+This gate exists because the SAME story must always produce the SAME relevance conclusion, regardless of which pass or reading order you use. Apply it exactly once, in this fixed order, and do not revisit the conclusion afterward:
+
+1. **Build a candidate list**: read the full description once and list every word/phrase that matches a UI-noun/verb pattern (screen, form, field, button, modal, tooltip, icon, banner, tab, dropdown, filter, notification, spinner, badge, checkbox, dropdown, link, card, dialog, or a clear synonym/paraphrase of these).
+2. **Test each candidate exactly once** against the false-positive check in Step 0.5 (is it something a user sees/interacts with, or a data field / technical term reusing a UI word?). Mark each candidate PASS or FAIL. Do not re-test a candidate a second time with a different interpretation — your first PASS/FAIL determination is final.
+3. **Final decision rule**: if AT LEAST ONE candidate is marked PASS → the story HAS user-facing elements; proceed to Step 1 to enumerate them (a single passing candidate is sufficient — do not require multiple confirmations, and do not discount a PASS because the story "seems mostly technical"). If ZERO candidates are marked PASS → output empty arrays; do not second-guess this by searching for implied elements not tied to an actual candidate word/phrase.
+4. **No re-scan after Step 1 begins.** Once you move to enumeration, do not return to reconsider whether the story qualifies — that decision was already made in this gate.
+
 ### Step 1 — Enumerate Elements
 
 Read the story carefully and list each **distinct** user-facing interface element exactly once. Apply these rules:
@@ -220,6 +238,53 @@ The story describes backend logic with no user-facing UI changes.
 
 ```json
 {"summary": "Existing context — 4 static + 1 dynamic element (tooltip component type counted once). Weights 2/5.", "context": "existing", "static_elements": ["Tooltip component", "Close button on overlay", "Navigation dots", "Next/Back buttons for tooltip flow"], "dynamic_elements": ["Background dimming overlay"], "static_weight": 2, "dynamic_weight": 5}
+```
+
+### Example 7 — Technical-sounding title hides a real UI element (do NOT default to empty)
+
+**Story title**: "Spike: Investigate slow load time of dashboard filters."
+
+**Description**: "...as part of this investigation, add a loading spinner to the existing dashboard while filters are being applied, so users know the page is working."
+
+**Verbatim check**: the phrase "add a loading spinner ... while filters are being applied" is a concrete, citable user-facing element. Even though the title says "Spike", this is NOT an empty-elements case.
+
+**Context detection**: "existing dashboard" → **existing context**.
+
+**Elements**:
+1. Loading spinner shown while filters are applied (Dynamic)
+
+```json
+{"summary": "Existing context — despite the Spike title, the description cites a concrete loading spinner element. 0 static + 1 dynamic element. Weights 2/5.", "context": "existing", "static_elements": [], "dynamic_elements": ["Loading spinner shown while filters are applied"], "static_weight": 2, "dynamic_weight": 5}
+```
+
+### Example 8 — UI-sounding word with no real interface element (do NOT include)
+
+**Story**: "Update the device analytics API to include a new 'screen resolution' field in the response schema, alongside 'device model' and 'OS version'."
+
+**Verbatim check**: "screen resolution" here is a data attribute name inside an API response schema, not something a user sees or interacts with. "device model" and "OS version" are likewise data fields, not UI components. No phrase in the description names a user-facing element.
+
+**Context detection**: not applicable — no UI elements found.
+
+```json
+{"summary": "No user-facing interface elements identified — 'screen resolution' is a data field in an API schema, not a UI component.", "context": "new", "static_elements": [], "dynamic_elements": [], "static_weight": 3, "dynamic_weight": 8}
+```
+
+### Example 9 — Binary gate applied to a genuinely ambiguous story (WRONG vs RIGHT reasoning)
+
+**Story**: "Refactor the notification pipeline; as part of this, add a small 'new message' badge icon next to the inbox link so users know unread messages exist."
+
+**Candidate list (Step 0.75)**: "notification pipeline" (backend term, FAIL — no user-facing phrase), "badge icon next to the inbox link" (PASS — concretely user-facing, citable verbatim), "inbox link" (PASS — a link the user clicks).
+
+**❌ WRONG**: Concluding "no elements" because the story title and first clause ("Refactor the notification pipeline") sound purely backend, and stopping the scan there. This is WRONG because Step 0.75 requires evaluating every candidate found in the FULL description, and the badge icon and inbox link both PASS.
+
+**✅ RIGHT**: At least one candidate (the badge icon) PASSES → the story HAS user-facing elements. Proceed to enumerate.
+
+**Elements**:
+1. "New message" badge icon next to inbox link (Static — count/state doesn't change interactive behavior of other elements)
+2. Inbox link (Static)
+
+```json
+{"summary": "Existing context — despite the backend-sounding opening clause, the description cites a concrete badge icon and inbox link. 2 static + 0 dynamic elements. Weights 2/5.", "context": "existing", "static_elements": ["New message badge icon next to inbox link", "Inbox link"], "dynamic_elements": [], "static_weight": 2, "dynamic_weight": 5}
 ```
 
 # user:

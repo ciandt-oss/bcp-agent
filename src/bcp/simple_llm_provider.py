@@ -41,7 +41,7 @@ class SimpleLLMProvider(LLMProvider):
     Recommended for: Flow gateway, Ollama, vLLM, LM Studio, LiteLLM, and OpenAI direct.
     """
 
-    def __init__(self, logger: logging.Logger, model: str = "mistral-small-2503",
+    def __init__(self, logger: logging.Logger, model: str = "gpt-6-luna",
                  api_key: Optional[str] = None, base_url: Optional[str] = None,
                  temperature: float = 0, max_tokens: int = 4096, timeout: float = 300):
         """
@@ -49,7 +49,7 @@ class SimpleLLMProvider(LLMProvider):
 
         Args:
             logger: The logger instance
-            model: Model name (e.g. "mistral-small-2503", "gpt-4o", "llama3.1:8b")
+            model: Model name (e.g. "gpt-6-luna", "gpt-4o", "llama3.1:8b")
             api_key: API key for the endpoint. Placeholders ("test-key", "dummy", "")
                      will omit the Authorization header. Falls back to OPENAI_API_KEY env var.
             base_url: Endpoint base URL (e.g. "http://127.0.0.1:8788/v1").
