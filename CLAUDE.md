@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-The BCP Calculator is a command-line tool that analyzes user stories and calculates Business Complexity Points (BCP) using LangChain with support for multiple LLM providers. The recommended model is `mistral-small-2503` with `temperature=0`, tested with the 13-dimensions pipeline to produce the lowest Coefficient of Variation (CV) across repeated executions. This application orchestrates a 14-cell pipeline across 3 parallel execution waves to evaluate story complexity across 13 dimensions: 10 functional dimensions, 3 NFR (Non-Functional Requirements) dimensions, and 2 complementary maturity evaluations.
+The BCP Calculator is a command-line tool that analyzes user stories and calculates Business Complexity Points (BCP) using LangChain with support for multiple LLM providers. The recommended model is `gpt-6-luna` with `temperature=0`, tested with the 13-dimensions pipeline to produce the lowest Coefficient of Variation (CV) across repeated executions. This application orchestrates a 14-cell pipeline across 3 parallel execution waves to evaluate story complexity across 13 dimensions: 10 functional dimensions, 3 NFR (Non-Functional Requirements) dimensions, and 2 complementary maturity evaluations.
 
 The tool also provides functionality to compare results between different LLM providers, generating detailed comparison reports and visualizations to help evaluate differences in BCP calculations.
 
@@ -62,7 +62,7 @@ Scoring is performed by `FormulaEvaluator`, a safe AST-based expression evaluato
 - **LangChain Core 1.6.3**: Core LangChain primitives
 - **LangChain OpenAI 1.6.2**: OpenAI provider integration
 - **LangChain Anthropic 1.7.2**: Anthropic provider integration
-- **Mistral Small 2503 (mistral-small-2503)**: Recommended model, tested with lowest CV
+- **GPT-6 Luna (gpt-6-luna)**: Recommended model, tested with lowest CV
 - **OpenAI SDK 3.16.2**: OpenAI API client
 - **Anthropic SDK 1.7.0**: Anthropic API client
 - **Jinja2 3.1.6**: Template engine for prompt rendering
@@ -73,7 +73,7 @@ Scoring is performed by `FormulaEvaluator`, a safe AST-based expression evaluato
 - **httpx**: HTTP client for SimpleLLMProvider (direct OpenAI-compatible API calls)
 - **Environment Variables**: Configuration management
 
-> **Recommended model:** `mistral-small-2503` with `temperature=0`. This combination was tested with the 13-dimensions pipeline and produces the lowest Coefficient of Variation (CV). All providers default to this model unless overridden via environment variables.
+> **Recommended model:** `gpt-6-luna` with `temperature=0`. This combination was tested with the 13-dimensions pipeline and produces the lowest Coefficient of Variation (CV). All providers default to this model unless overridden via environment variables.
 
 ## Common Tasks
 

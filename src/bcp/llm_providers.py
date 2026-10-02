@@ -3,7 +3,7 @@ LLM Providers for BCP Calculator
 
 This module provides a unified interface for different LLM providers.
 
-Recommended model: mistral-small-2503 with temperature=0. This combination was
+Recommended model: gpt-6-luna with temperature=0. This combination was
 tested with the 13-dimensions pipeline and produces the lowest Coefficient of
 Variation (CV) across repeated executions. All provider defaults use this model
 and temperature unless overridden via environment variables.
@@ -69,7 +69,7 @@ class LLMProvider(ABC):
 class OpenAIProvider(LLMProvider):
     """OpenAI provider implementation."""
     
-    def __init__(self, logger: logging.Logger, model_name: str = "mistral-small-2503", temperature: float = 0):
+    def __init__(self, logger: logging.Logger, model_name: str = "gpt-6-luna", temperature: float = 0):
         """
         Initialize the OpenAI provider.
 
@@ -100,7 +100,7 @@ class OpenAIProvider(LLMProvider):
 class ClaudeProvider(LLMProvider):
     """Anthropic Claude provider implementation."""
 
-    def __init__(self, logger: logging.Logger, model_name: str = "mistral-small-2503", temperature: float = 0):
+    def __init__(self, logger: logging.Logger, model_name: str = "gpt-6-luna", temperature: float = 0):
         """
         Initialize the Claude provider.
 
@@ -156,7 +156,7 @@ class FlowLiteLLMChatModel(BaseChatModel):
     @model_validator(mode='before')
     def validate_environment(cls, values: Dict) -> Dict:
         """Validate that the environment is properly set up for LiteLLM."""
-        values["model_name"] = values.get("model_name") or "mistral-small-2503"
+        values["model_name"] = values.get("model_name") or "gpt-6-luna"
         values["temperature"] = values.get("temperature") or 0.0
         values["max_tokens"] = values.get("max_tokens") or 4096
         values["base_url"] = values.get("base_url") or "https://flow.ciandt.com/flow-litellm"
@@ -256,7 +256,7 @@ class FlowLiteLLMProvider(LLMProvider):
 
     def __init__(self,
                  logger: logging.Logger,
-                 model_name: str = "mistral-small-2503",
+                 model_name: str = "gpt-6-luna",
                  temperature: float = 0,
                  max_tokens: int = 4096):
         """
@@ -324,17 +324,17 @@ def get_provider(provider_name: str, logger: logging.Logger) -> LLMProvider:
 
     if provider_name == "openai":
         from .simple_llm_provider import SimpleLLMProvider
-        model_name = os.environ.get("OPENAI_MODEL_NAME", "mistral-small-2503")
+        model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-6-luna")
         return SimpleLLMProvider(logger, model=model_name)
     elif provider_name == "claude":
-        model_name = os.environ.get("ANTHROPIC_MODEL_NAME", "mistral-small-2503")
+        model_name = os.environ.get("ANTHROPIC_MODEL_NAME", "gpt-6-luna")
         return ClaudeProvider(logger, model_name=model_name)
     elif provider_name == "flow-openai":
-        model_name = os.environ.get("FLOW_MODEL_NAME", "mistral-small-2503")
+        model_name = os.environ.get("FLOW_MODEL_NAME", "gpt-6-luna")
         max_tokens = int(os.environ.get("FLOW_MAX_TOKENS", "4096"))
         return FlowLiteLLMProvider(logger, model_name=model_name, max_tokens=max_tokens)
     elif provider_name == "flow-bedrock":
-        model_name = os.environ.get("FLOW_BEDROCK_MODEL_NAME", "mistral-small-2503")
+        model_name = os.environ.get("FLOW_BEDROCK_MODEL_NAME", "gpt-6-luna")
         max_tokens = int(os.environ.get("FLOW_BEDROCK_MAX_TOKENS", "1000"))
         temperature = float(os.environ.get("FLOW_BEDROCK_TEMPERATURE", "0"))
         return FlowLiteLLMProvider(logger, model_name=model_name, max_tokens=max_tokens)

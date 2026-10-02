@@ -56,7 +56,7 @@ def test_flow_litellm_chat_model_llm_type():
         base_url="https://example.com/flow-litellm",
         flow_tenant="test-tenant",
         flow_agent="test-agent",
-        model_name="mistral-small-2503",
+        model_name="gpt-6-luna",
         temperature=0,
         max_tokens=4096,
         api_key="test-token",
@@ -77,7 +77,7 @@ def test_flow_litellm_url_has_no_openai_prefix(mock_post):
         base_url="https://example.com/flow-litellm",
         flow_tenant="test-tenant",
         flow_agent="test-agent",
-        model_name="mistral-small-2503",
+        model_name="gpt-6-luna",
         temperature=0,
         max_tokens=4096,
         api_key="test-token",
@@ -103,7 +103,7 @@ def test_flow_litellm_uses_authorization_bearer(mock_post):
         base_url="https://example.com/flow-litellm",
         flow_tenant="test-tenant",
         flow_agent="test-agent",
-        model_name="mistral-small-2503",
+        model_name="gpt-6-luna",
         temperature=0,
         max_tokens=4096,
         api_key="my-jwt-token",
@@ -129,7 +129,7 @@ def test_flow_litellm_includes_flow_channel(mock_post):
         base_url="https://example.com/flow-litellm",
         flow_tenant="test-tenant",
         flow_agent="test-agent",
-        model_name="mistral-small-2503",
+        model_name="gpt-6-luna",
         temperature=0,
         max_tokens=4096,
         api_key="test-token",
@@ -154,7 +154,7 @@ def test_flow_litellm_payload_includes_model(mock_post):
         base_url="https://example.com/flow-litellm",
         flow_tenant="test-tenant",
         flow_agent="test-agent",
-        model_name="mistral-small-2503",
+        model_name="gpt-6-luna",
         temperature=0,
         max_tokens=4096,
         api_key="test-token",
@@ -163,7 +163,7 @@ def test_flow_litellm_payload_includes_model(mock_post):
 
     call_args = mock_post.call_args
     payload = call_args[1]["json"]
-    assert payload["model"] == "mistral-small-2503"
+    assert payload["model"] == "gpt-6-luna"
 
 
 @patch("bcp.llm_providers.requests.post")
@@ -206,7 +206,7 @@ def test_flow_litellm_payload_includes_temperature_for_non_gpt5(mock_post):
         base_url="https://example.com/flow-litellm",
         flow_tenant="test-tenant",
         flow_agent="test-agent",
-        model_name="mistral-small-2503",
+        model_name="gpt-6-luna",
         temperature=0,
         max_tokens=4096,
         api_key="test-token",
@@ -232,7 +232,7 @@ def test_flow_litellm_includes_flow_headers(mock_post):
         base_url="https://example.com/flow-litellm",
         flow_tenant="my-tenant",
         flow_agent="my-agent",
-        model_name="mistral-small-2503",
+        model_name="gpt-6-luna",
         temperature=0,
         max_tokens=4096,
         api_key="test-token",

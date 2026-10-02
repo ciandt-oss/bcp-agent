@@ -1,6 +1,6 @@
 # BCP Calculator
 
-A tool for calculating Business Complexity Points (BCP) of user stories using LangChain with support for multiple LLM providers. The recommended model is `mistral-small-2503` with `temperature=0`, tested with the 13-dimensions pipeline to produce the lowest Coefficient of Variation (CV) across repeated executions.
+A tool for calculating Business Complexity Points (BCP) of user stories using LangChain with support for multiple LLM providers. The recommended model is `gpt-6-luna` with `temperature=0`, tested with the 13-dimensions pipeline to produce the lowest Coefficient of Variation (CV) across repeated executions.
 
 > **Note:** The next version will feature broader model family coverage, expanding support and testing across additional LLM families beyond the current OpenAI-compatible providers.
 
@@ -39,7 +39,7 @@ The application orchestrates 14 cells across 3 parallel execution waves:
 
 ## Recommended Model
 
-The recommended model is `mistral-small-2503` with `temperature=0`. This combination was tested with the 13-dimensions pipeline and produces the lowest Coefficient of Variation (CV) across repeated executions. All providers default to this model unless overridden via environment variables.
+The recommended model is `gpt-6-luna` with `temperature=0`. This combination was tested with the 13-dimensions pipeline and produces the lowest Coefficient of Variation (CV) across repeated executions. All providers default to this model unless overridden via environment variables.
 
 ## Installation
 
@@ -117,13 +117,13 @@ Uses `SimpleLLMProvider` (httpx-based) to connect to any OpenAI-compatible endpo
 |---|---|---|---|
 | `OPENAI_API_KEY` | Yes | — | Your OpenAI API key (or placeholder for local gateways) |
 | `OPENAI_BASE_URL` | No | `https://api.openai.com/v1` | Base URL for the endpoint (use for local gateways, Ollama, etc.) |
-| `OPENAI_MODEL_NAME` | No | `mistral-small-2503` | Model to use |
+| `OPENAI_MODEL_NAME` | No | `gpt-6-luna` | Model to use |
 
 **.env example:**
 ```env
 OPENAI_API_KEY=sk-...
 OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL_NAME=mistral-small-2503
+OPENAI_MODEL_NAME=gpt-6-luna
 ```
 
 **Usage:**
@@ -141,13 +141,13 @@ Connects directly to the Anthropic API using `langchain-anthropic`.
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | — | Your Anthropic API key |
 | `ANTHROPIC_BASE_URL` | No | `https://api.anthropic.com` | Base URL (use for proxies or Anthropic-compatible endpoints) |
-| `ANTHROPIC_MODEL_NAME` | No | `mistral-small-2503` | Model to use |
+| `ANTHROPIC_MODEL_NAME` | No | `gpt-6-luna` | Model to use |
 
 **.env example:**
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_BASE_URL=https://api.anthropic.com
-ANTHROPIC_MODEL_NAME=mistral-small-2503
+ANTHROPIC_MODEL_NAME=gpt-6-luna
 ```
 
 **Usage:**
@@ -167,7 +167,7 @@ Routes requests through [CI&T Flow](https://flow.ciandt.com)'s LiteLLM proxy. Au
 | `FLOW_LITELLM_TOKEN_JWT` | Yes | — | JWT token for the LiteLLM proxy (sent as `Authorization: Bearer`) |
 | `FLOW_TENANT` | No | `flowteam` | Tenant identifier sent in the `FlowTenant` header |
 | `FLOW_AGENT` | No | `bcp-opensource` | Agent identifier sent in the `FlowAgent` header |
-| `FLOW_LITELLM_MODEL_NAME` | No | `mistral-small-2503` | Model to use |
+| `FLOW_LITELLM_MODEL_NAME` | No | `gpt-6-luna` | Model to use |
 | `FLOW_LITELLM_MAX_TOKENS` | No | `4096` | Maximum tokens to generate |
 | `FLOW_LITELLM_TEMPERATURE` | No | `0` | Sampling temperature |
 
@@ -177,7 +177,7 @@ FLOW_LLM_LITE_HOST=https://flow.ciandt.com/flow-litellm
 FLOW_LITELLM_TOKEN_JWT=your_jwt_token_here
 FLOW_TENANT=flowteam
 FLOW_AGENT=bcp-opensource
-FLOW_LITELLM_MODEL_NAME=mistral-small-2503
+FLOW_LITELLM_MODEL_NAME=gpt-6-luna
 ```
 
 **Usage:**
