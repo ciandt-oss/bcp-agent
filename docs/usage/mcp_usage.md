@@ -19,7 +19,9 @@ Before using the MCP server, make sure you have:
    - OpenAI: set OPENAI_API_KEY and optional OPENAI_MODEL_NAME
    - Anthropic (Claude): set ANTHROPIC_API_KEY and optional ANTHROPIC_MODEL_NAME
    - Flow OpenAI (flow-openai): set FLOW_LLM_LITE_HOST, FLOW_LITELLM_CLIENT_ID, FLOW_LITELLM_CLIENT_SECRET, FLOW_LITELLM_SCOPE, optional FLOW_TENANT, FLOW_AGENT, FLOW_LITELLM_MODEL_NAME
-   - Flow Bedrock: set FLOW_CLIENT_ID, FLOW_CLIENT_SECRET, FLOW_BASE_URL, optional FLOW_BEDROCK_MODEL_NAME, FLOW_BEDROCK_TEMPERATURE
+   - AWS Bedrock (bedrock): set AWS_BEDROCK_REGION (optional, default: us-east-1), optional FLOW_BEDROCK_MODEL_NAME, FLOW_BEDROCK_TEMPERATURE. Auth via aws_bedrock_token_generator (auto-refreshed) or AWS_BEARER_TOKEN_BEDROCK env var
+   - OpenRouter (openrouter): set OPENROUTER_API_KEY (required), optional OPENROUTER_MODEL_NAME (default: openai/gpt-6-luna), OPENROUTER_SITE_URL (optional), OPENROUTER_APP_TITLE (optional)
+   - HuggingFace (huggingface): set HF_TOKEN (required), optional HF_MODEL_NAME (default: zai-org/GLM-5.2:novita)
 
 ## Starting the MCP Server (stdio)
 
@@ -41,7 +43,7 @@ python run_mcp_http_server.py --host 0.0.0.0 --port 51617
 
 Notes:
 - Allowed origins default to "*". You can override with `--allowed-origins` or `MCP_ALLOWED_ORIGINS`.
-- Provider configuration is read from `.env` by default. Set BCP_PROVIDER to one of: openai | claude | flow-openai | flow-bedrock. MCP requests can optionally override provider and credentials per-call using the tool arguments.
+- Provider configuration is read from `.env` by default. Set BCP_PROVIDER to one of: openai | claude | flow-openai | bedrock | openrouter | huggingface. MCP requests can optionally override provider and credentials per-call using the tool arguments.
 
 ## MCP Client Examples
 

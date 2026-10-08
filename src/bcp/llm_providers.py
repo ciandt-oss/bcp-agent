@@ -100,7 +100,7 @@ class OpenAIProvider(LLMProvider):
 class ClaudeProvider(LLMProvider):
     """Anthropic Claude provider implementation."""
 
-    def __init__(self, logger: logging.Logger, model_name: str = "gpt-6-luna", temperature: float = 0):
+    def __init__(self, logger: logging.Logger, model_name: str = "claude-sonnet-4-6", temperature: float = 0):
         """
         Initialize the Claude provider.
 
@@ -308,10 +308,13 @@ def get_provider(provider_name: str, logger: logging.Logger) -> LLMProvider:
 
     The 'openai' provider now uses SimpleLLMProvider (httpx-based) as the default,
     which works reliably with both OpenAI direct and local gateways (Flow, Ollama, etc.).
+    The 'bedrock' provider uses BedrockProvider (native AWS Bedrock Converse API).
+    The 'openrouter' and 'huggingface' providers use SimpleLLMProvider with custom base URLs.
     The langchain-based OpenAIProvider is still available but not the default.
 
     Args:
-        provider_name: The name of the provider ('openai', 'claude', 'flow-openai', 'flow-bedrock')
+        provider_name: The name of the provider ('openai', 'claude', 'flow-openai', 'bedrock',
+                       'openrouter', 'huggingface')
         logger: The logger instance
 
     Returns:
@@ -327,16 +330,40 @@ def get_provider(provider_name: str, logger: logging.Logger) -> LLMProvider:
         model_name = os.environ.get("OPENAI_MODEL_NAME", "gpt-6-luna")
         return SimpleLLMProvider(logger, model=model_name)
     elif provider_name == "claude":
-        model_name = os.environ.get("ANTHROPIC_MODEL_NAME", "gpt-6-luna")
+        model_name = os.environ.get("ANTHROPIC_MODEL_NAME", "claude-sonnet-4-6")
         return ClaudeProvider(logger, model_name=model_name)
     elif provider_name == "flow-openai":
-        model_name = os.environ.get("FLOW_MODEL_NAME", "gpt-6-luna")
-        max_tokens = int(os.environ.get("FLOW_MAX_TOKENS", "4096"))
-        return FlowLiteLLMProvider(logger, model_name=model_name, max_tokens=max_tokens)
-    elif provider_name == "flow-bedrock":
-        model_name = os.environ.get("FLOW_BEDROCK_MODEL_NAME", "gpt-6-luna")
-        max_tokens = int(os.environ.get("FLOW_BEDROCK_MAX_TOKENS", "1000"))
+        model_name = os.environ.get("FLOW_LITELLM_MODEL_NAME") or os.environ.get("FLOW_MODEL_NAME", "gpt-6-luna")
+        max_tokens = int(os.environ.get("FLOW_LITELLM_MAX_TOKENS") or os.environ.get("FLOW_MAX_TOKENS", "4096"))
+        temperature = float(os.environ.get("FLOW_LITELLM_TEMPERATURE", "0"))
+        return FlowLiteLLMProvider(logger, model_name=model_name, max_tokens=max_tokens, temperature=temperature)
+    elif provider_name == "bedrock":
+        from .bedrock_provider import BedrockProvider
+        model_name = os.environ.get("FLOW_BEDROCK_MODEL_NAME", "openai.gpt-5.6-luna")
+        max_tokens = int(os.environ.get("FLOW_BEDROCK_MAX_TOKENS", "4096"))
         temperature = float(os.environ.get("FLOW_BEDROCK_TEMPERATURE", "0"))
-        return FlowLiteLLMProvider(logger, model_name=model_name, max_tokens=max_tokens)
+        region = os.environ.get("AWS_BEDROCK_REGION", "us-east-1")
+        return BedrockProvider(logger, model_name=model_name, region=region,
+                               temperature=temperature, max_tokens=max_tokens)
+    elif provider_name == "openrouter":
+        from .simple_llm_provider import SimpleLLMProvider
+        model_name = os.environ.get("OPENROUTER_MODEL_NAME", "openai/gpt-6-luna")
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        base_url = "https://openrouter.ai/api/v1"
+        extra_headers = {}
+        site_url = os.environ.get("OPENROUTER_SITE_URL")
+        app_title = os.environ.get("OPENROUTER_APP_TITLE")
+        if site_url:
+            extra_headers["HTTP-Referer"] = site_url
+        if app_title:
+            extra_headers["X-Title"] = app_title
+        return SimpleLLMProvider(logger, model=model_name, api_key=api_key,
+                                 base_url=base_url, extra_headers=extra_headers or None)
+    elif provider_name == "huggingface":
+        from .simple_llm_provider import SimpleLLMProvider
+        model_name = os.environ.get("HF_MODEL_NAME", "zai-org/GLM-5.2:novita")
+        api_key = os.environ.get("HF_TOKEN", "")
+        base_url = "https://router.huggingface.co/v1"
+        return SimpleLLMProvider(logger, model=model_name, api_key=api_key, base_url=base_url)
     else:
         raise ValueError(f"Unsupported provider: {provider_name}")

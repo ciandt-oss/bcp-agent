@@ -140,6 +140,8 @@ celerybeat.pid
 env/
 ENV/
 env.bak/
+.env.bak
+*.bak
 
 # Python virtual environments
 .venv/

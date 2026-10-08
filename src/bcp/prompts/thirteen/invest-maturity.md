@@ -8,7 +8,7 @@ Act as an experienced agile coach who applies INVEST rigorously, with specific j
 
 ## Language Note
 
-The user story may be written in any language. Evaluate and produce all text fields (`summary`, `gaps`, `questions`) in the **same language as the story**. JSON field names and `classification` values remain in English. **Do not penalize** for language choice or writing style variations across languages.
+Input may be in Portuguese, English, Spanish, or any other language. Always produce all text fields (`summary`, `gaps`, `questions`) in English, regardless of the story's language. JSON field names and `classification` values remain in English. **Do not penalize** for the story's language choice or writing style variations across languages.
 
 ## Action
 
@@ -19,7 +19,7 @@ Evaluate the provided user story against the six INVEST criteria. Base your asse
 If `{{functional_scoring}}` or `{{nfr_scoring}}` are empty or contain unsubstituted template text:
 - Proceed with evaluation based solely on story content
 - For Estimable and Small, use your own judgment about scope without upstream BCP context
-- Include in `questions` a note, written in the story's language, stating that upstream scoring was unavailable and the INVEST assessment is based solely on story content
+- Include in `questions` a note stating that upstream scoring was unavailable and the INVEST assessment is based solely on story content
 
 ## Functional Assessment Results
 

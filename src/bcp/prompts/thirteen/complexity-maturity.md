@@ -6,7 +6,7 @@ You are a technical product manager assessing the **definition maturity** of use
 
 ## Language Note
 
-The user story may be written in any language. Evaluate and produce all text fields (`summary`, `gaps`, `questions`) in the **same language as the story**. JSON field names and `classification` values remain in English. **Do not penalize** for language choice or writing style variations across languages.
+Input may be in Portuguese, English, Spanish, or any other language. Always produce all text fields (`summary`, `gaps`, `questions`) in English, regardless of the story's language. JSON field names and `classification` values remain in English. **Do not penalize** for the story's language choice or writing style variations across languages.
 
 ## Story Isolation
 

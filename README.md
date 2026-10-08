@@ -4,6 +4,8 @@ A tool for calculating Business Complexity Points (BCP) of user stories using La
 
 > **Note:** The next version will feature broader model family coverage, expanding support and testing across additional LLM families beyond the current OpenAI-compatible providers.
 
+> **Note:** The BCP 13D skill (`bcp-calculator-13d`) is currently in **alpha testing**. Scoring results may vary between runs. Feedback and bug reports are welcome.
+
 ## Overview
 
 The BCP Calculator analyzes user stories and calculates their Business Complexity Points based on 13 dimensions:
@@ -80,7 +82,9 @@ The recommended model is `gpt-6-luna` with `temperature=0`. This combination was
    - `.env.openai.example` — OpenAI direct (api.openai.com)
    - `.env.anthropic.example` — Anthropic Claude
    - `.env.flow.example` — Flow OpenAI (LiteLLM proxy, JWT token)
-   - `.env.flow-bedrock.example` — Flow Bedrock
+   - `.env.bedrock.example` — AWS Bedrock (native Converse API)
+   - `.env.openrouter.example` — OpenRouter (OpenAI-compatible aggregator)
+   - `.env.huggingface.example` — HuggingFace (OpenAI-compatible router)
 
    Copy the one that matches your setup, e.g.:
    ```
@@ -89,7 +93,7 @@ The recommended model is `gpt-6-luna` with `temperature=0`. This combination was
 
 ## LLM Providers
 
-The BCP Calculator supports four LLM providers, selected via the `--provider` flag. Each requires its own set of environment variables in your `.env` file.
+The BCP Calculator supports six LLM providers, selected via the `--provider` flag. Each requires its own set of environment variables in your `.env` file.
 
 ---
 
@@ -141,13 +145,13 @@ Connects directly to the Anthropic API using `langchain-anthropic`.
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | — | Your Anthropic API key |
 | `ANTHROPIC_BASE_URL` | No | `https://api.anthropic.com` | Base URL (use for proxies or Anthropic-compatible endpoints) |
-| `ANTHROPIC_MODEL_NAME` | No | `gpt-6-luna` | Model to use |
+| `ANTHROPIC_MODEL_NAME` | No | `claude-sonnet-4-6` | Model to use |
 
 **.env example:**
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_BASE_URL=https://api.anthropic.com
-ANTHROPIC_MODEL_NAME=gpt-6-luna
+ANTHROPIC_MODEL_NAME=claude-sonnet-4-6
 ```
 
 **Usage:**
@@ -167,8 +171,8 @@ Routes requests through [CI&T Flow](https://flow.ciandt.com)'s LiteLLM proxy. Au
 | `FLOW_LITELLM_TOKEN_JWT` | Yes | — | JWT token for the LiteLLM proxy (sent as `Authorization: Bearer`) |
 | `FLOW_TENANT` | No | `flowteam` | Tenant identifier sent in the `FlowTenant` header |
 | `FLOW_AGENT` | No | `bcp-opensource` | Agent identifier sent in the `FlowAgent` header |
-| `FLOW_LITELLM_MODEL_NAME` | No | `gpt-6-luna` | Model to use |
-| `FLOW_LITELLM_MAX_TOKENS` | No | `4096` | Maximum tokens to generate |
+| `FLOW_LITELLM_MODEL_NAME` | No | `gpt-6-luna` | Model to use (legacy alias: `FLOW_MODEL_NAME`) |
+| `FLOW_LITELLM_MAX_TOKENS` | No | `4096` | Maximum tokens to generate (legacy alias: `FLOW_MAX_TOKENS`) |
 | `FLOW_LITELLM_TEMPERATURE` | No | `0` | Sampling temperature |
 
 **.env example:**
@@ -187,15 +191,105 @@ python run_cli.py story.md --provider flow-openai
 
 ---
 
+### AWS Bedrock (`--provider bedrock`)
+
+Calls the [AWS Bedrock Converse API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html) directly using `httpx` (no boto3, no langchain). The provider name remains `bedrock` for backward compatibility.
+
+**Endpoint:** `POST https://bedrock-runtime.{region}.amazonaws.com/model/{modelId}/converse`
+
+**Auth:** Uses `aws_bedrock_token_generator.provide_token()` (auto-refreshed bearer token) by default. Alternatively, set `AWS_BEARER_TOKEN_BEDROCK` to supply a static token.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `AWS_BEDROCK_REGION` | No | `us-east-1` | AWS region for the Bedrock runtime endpoint |
+| `AWS_BEARER_TOKEN_BEDROCK` | No | — | Static bearer token (overrides token generator) |
+| `FLOW_BEDROCK_MODEL_NAME` | No | `openai.gpt-5.6-luna` | Bedrock model ID |
+| `FLOW_BEDROCK_MAX_TOKENS` | No | `4096` | Maximum tokens to generate |
+| `FLOW_BEDROCK_TEMPERATURE` | No | `0` | Sampling temperature |
+
+**.env example:**
+```env
+AWS_BEDROCK_REGION=us-east-1
+FLOW_BEDROCK_MODEL_NAME=openai.gpt-5.6-luna
+FLOW_BEDROCK_MAX_TOKENS=4096
+FLOW_BEDROCK_TEMPERATURE=0
+```
+
+**Usage:**
+```bash
+python run_cli.py story.md --provider bedrock
+```
+
+---
+
+### OpenRouter (`--provider openrouter`)
+
+Uses `SimpleLLMProvider` (httpx-based) to connect to the [OpenRouter](https://openrouter.ai) API, which aggregates multiple LLM providers behind an OpenAI-compatible Chat Completions endpoint.
+
+**Endpoint:** `POST https://openrouter.ai/api/v1/chat/completions`
+
+**Auth:** `Authorization: Bearer {OPENROUTER_API_KEY}`
+
+Optional attribution headers (`HTTP-Referer`, `X-Title`) are sent when `OPENROUTER_SITE_URL` and `OPENROUTER_APP_TITLE` are set.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `OPENROUTER_API_KEY` | Yes | — | Your OpenRouter API key |
+| `OPENROUTER_MODEL_NAME` | No | `openai/gpt-6-luna` | Model to use (OpenRouter model identifier) |
+| `OPENROUTER_SITE_URL` | No | — | Site URL sent as `HTTP-Referer` header (for app attribution) |
+| `OPENROUTER_APP_TITLE` | No | — | App title sent as `X-Title` header (for app attribution) |
+
+**.env example:**
+```env
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL_NAME=openai/gpt-6-luna
+OPENROUTER_SITE_URL=https://example.com
+OPENROUTER_APP_TITLE=BCP Calculator
+```
+
+**Usage:**
+```bash
+python run_cli.py story.md --provider openrouter
+```
+
+---
+
+### HuggingFace (`--provider huggingface`)
+
+Uses `SimpleLLMProvider` (httpx-based) to connect to the [HuggingFace](https://huggingface.co) inference router, which exposes an OpenAI-compatible Chat Completions endpoint.
+
+**Endpoint:** `POST https://router.huggingface.co/v1/chat/completions`
+
+**Auth:** `Authorization: Bearer {HF_TOKEN}`
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `HF_TOKEN` | Yes | — | Your HuggingFace access token |
+| `HF_MODEL_NAME` | No | `zai-org/GLM-5.2:novita` | Model to use (HuggingFace model identifier) |
+
+**.env example:**
+```env
+HF_TOKEN=hf_...
+HF_MODEL_NAME=zai-org/GLM-5.2:novita
+```
+
+**Usage:**
+```bash
+python run_cli.py story.md --provider huggingface
+```
+
+---
+
 ## Integration Options
 
-The BCP Calculator can be used in five different ways:
+The BCP Calculator can be used in six different ways:
 
 1. **[Command Line Interface (CLI)](docs/usage/cli_usage.md)** - Use as a traditional command-line tool
 2. **[HTTP API](docs/usage/http_api_usage.md)** - Run as a RESTful API service
 3. **[Model Context Protocol (MCP)](docs/usage/mcp_usage.md)** - Use with any MCP client (stdio or streamable HTTP)
 4. **[Python SDK](docs/usage/sdk_usage.md)** - Import and use as a Python library
-5. **[Standalone Skill](#standalone-skill)** - Claude Code skill that runs without any API or SDK (see section below)
+5. **[Claude Code Skill (13D)](docs/usage/skill_usage.md)** - Claude Code skill that calls the local API server for 13-dimensions BCP calculation
+6. **[Claude Code Skill (Story Writing Coach)](#skills)** - Claude Code skill that reviews and coaches story writing against the 13 BCP dimensions
 
 Choose the integration option that best fits your workflow. Click the links above for detailed usage instructions for each option.
 
@@ -211,7 +305,7 @@ python run_cli.py path/to/user_story.md
 
 - `--log-level`: Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). Default is INFO.
 - `--output-file`: Path to save the output results. If not provided, results are printed to stdout.
-- `--provider`: LLM provider to use (openai, claude, flow-openai, flow-bedrock). Default is openai.
+- `--provider`: LLM provider to use (openai, claude, flow-openai, bedrock, openrouter, huggingface). Default is openai.
 - `--format`: Output format (text or json). Default is json.
 - `--max-workers`: Maximum number of parallel threads per wave (default: 5). Controls the ThreadPoolExecutor parallelism for Wave 1 cells.
 
@@ -286,6 +380,7 @@ The output includes:
   - `prompt_handler.py`: Handles loading and processing `.md` prompt templates from subdirectories, story dict bindings, and JSON parsing
   - `llm_providers.py`: Provider abstraction for different LLM services
   - `simple_llm_provider.py`: Default LLM provider using httpx directly for OpenAI-compatible endpoints
+  - `bedrock_provider.py`: Native AWS Bedrock Converse API provider using httpx
   - `logger.py`: Custom logging functionality
   - `prompts/thirteen/`: Directory containing the 13-dimensions prompt templates (`.md` files)
     - `functional/`: 10 functional dimension prompts + aggregator prompt
@@ -305,88 +400,150 @@ The output includes:
   - `http_api_usage.md`: HTTP API usage guide
   - `mcp_usage.md`: MCP usage guide
   - `sdk_usage.md`: SDK usage guide
+  - `skill_usage.md`: Claude Code skill usage guide (13D)
+  - `README.md`: Index of usage guides
 - `README.md`: Project documentation
 - `LICENSE`: License information
 
-### Standalone Skill
-- `skill/`: Standalone Claude Code skill (no API, no SDK)
-  - `bcp-calculator-13d/`: BCP 13D skill with prompts + pipeline script
+### Skills
+- `skills/`: Claude Code skills
+  - `bcp-calculator-13d/`: BCP 13D skill — calls the local API server to calculate BCP
+    - `SKILL.md`: Skill instructions for the agent
+    - `scripts/bcp_calculate_13d.py`: Script that submits stories to the local API and parses results
+  - `bcp-story-writing-coach/`: Story writing coach skill — reviews stories against the 13 BCP dimensions
+    - `SKILL.md`: Skill instructions for the agent
+    - `rules/`: 13 dimension rule files (D1–D13)
 
-## Standalone Skill
+## Skills
 
-The `skill/bcp-calculator-13d/` directory contains a **self-contained Claude Code skill** that calculates BCP 13 dimensions without any external API, SDK, or provider configuration. The agent (Claude) processes the prompts directly — Claude IS the LLM.
+The `skills/` directory contains **Claude Code skills** that provide agent-driven interfaces to the BCP Calculator.
 
-### Structure
+### BCP Calculator 13D Skill
+
+> **⚠️ Alpha Testing:** This skill is currently in alpha. Scoring results may vary between run.
+
+The `skills/bcp-calculator-13d/` skill calculates BCP 13 dimensions by calling the **local API server** (`run_api_server.py`). It is not standalone — it requires the API server to be running.
+
+#### Structure
 
 ```
-skill/bcp-calculator-13d/
+skills/bcp-calculator-13d/
 ├── SKILL.md                              # Skill instructions for the agent
-├── scripts/
-│   └── bcp_pipeline.py                   # Score calculation & consolidation (stdlib only)
-└── prompts/
-    └── thirteen/
-        ├── functional/
-        │   ├── business-rules.md
-        │   ├── interface-elements.md
-        │   ├── solution-variabilities.md
-        │   ├── domain-entities.md
-        │   ├── new-domain-entities.md
-        │   ├── roles-permissions.md
-        │   ├── boundaries.md
-        │   ├── background-processes.md
-        │   ├── notifications.md
-        │   ├── audits.md
-        │   └── aggregator.md
-        ├── nfr-scoring.md
-        ├── complexity-maturity.md
-        └── invest-maturity.md
+└── scripts/
+    └── bcp_calculate_13d.py              # API client script (stdlib only)
 ```
 
-### How It Works
+#### How It Works
 
 When the skill is triggered, the agent:
 
-1. **Identifies stories** — from inline text, a `.md` file, or a folder of `story-*.md` files
-2. **Groups stories into waves** — 3-5 stories per wave for batch processing
-3. **Executes the 3-wave pipeline** for each story:
-   - **Wave 1:** Processes 11 prompts (10 functional + NFR) — the agent reads each `.md` prompt, fills in `{{story.key}}`, `{{story.summary}}`, `{{story.description}}`, and processes it as the LLM
-   - **Wave 2:** Processes the aggregator prompt with `{{dim_*}}` bindings (numeric scores from Wave 1)
-   - **Wave 3:** Processes 2 maturity prompts with `{{functional_scoring}}` and `{{nfr_scoring}}` bindings (full JSON from Waves 1-2)
-4. **Calculates scores** — uses `bcp_pipeline.py` to apply the 14 score formulas
-5. **Consolidates and presents** — produces BCP Total, CMS, IMS, and all 13 dimension scores
+1. **Checks the local server** — verifies that `run_api_server.py` is running on `http://127.0.0.1:8000`
+2. **Identifies stories** — from inline text, a `.md` file, or a folder of `story-*.md` files
+3. **Calls the bundled script** — `bcp_calculate_13d.py` submits each story to the local API (`POST /calculate`) and polls for results (`GET /status/{job_id}`)
+4. **Presents the results** — formats the JSON output into Markdown tables with BCP Total, CMS, IMS, and all 13 dimension scores
 
-### `bcp_pipeline.py` — Score Calculation Utility
+No authentication token is required — the local API server accepts requests directly.
 
-A standalone Python script (stdlib only — no pip packages required) with 4 commands:
+#### `bcp_calculate_13d.py` — API Client Script
 
-| Command | Purpose |
-|---------|---------|
-| `score` | Calculates a single cell's score from its JSON output |
-| `aggregate` | Calculates the aggregator score from 10 dimension bindings |
-| `consolidate` | Consolidates all 14 cell outputs of a story into structured JSON |
-| `aggregate-stories` | Aggregates multiple stories into a summary report |
+A standalone Python script (stdlib only — no pip packages required) that:
+
+| Action | Purpose |
+|--------|---------|
+| Submit job | `POST /calculate` with story content and provider |
+| Poll status | `GET /status/{job_id}` every 3 seconds until completed or failed |
+| Parse result | Extracts BCP total, CMS, IMS, and 13 dimension scores from the response |
+| Retry | Automatically retries up to 2 more times if any cells fail |
 
 ```bash
-# Calculate a cell's score
-python scripts/bcp_pipeline.py score --cell business_rules --output '{"scores_extracted": [3, 5]}'
+# Calculate from a story file
+python skills/bcp-calculator-13d/scripts/bcp_calculate_13d.py \
+  --file tests/data/story1.md --provider openai
 
-# Calculate aggregator score
-python scripts/bcp_pipeline.py aggregate --bindings '{"dim_business_rules": 8, ...}'
-
-# Consolidate a complete story
-python scripts/bcp_pipeline.py consolidate --input story_results.json
-
-# Aggregate multiple stories
-python scripts/bcp_pipeline.py aggregate-stories --input all_stories.json
+# Calculate from inline text
+python skills/bcp-calculator-13d/scripts/bcp_calculate_13d.py \
+  --title "User Story: Add Payment Method" \
+  --description "## Narrativa de Negócio (Business Narrative)\n\nAs a user, I want to..."
 ```
 
-### Key Features
+#### Key Features
 
-- **Fully agnostic** — no provider, model, API key, or endpoint configuration needed
-- **Zero dependencies** — only Python stdlib (no pip packages for the script; prompts are processed by the agent)
-- **Self-contained** — owns its copy of the 14 prompts; does not import from `src/bcp/`
-- **Deterministic** — the SKILL.md enforces absolute determinism: return exactly the JSON each prompt specifies, no variations or abstractions
-- **Wave-based** — 3 waves per story (11 + 1 + 2 cells); multiple stories grouped in waves of 3-5
+- **Requires local API server** — start with `python run_api_server.py` before using the skill
+- **No authentication** — the local API server does not require a Bearer token
+- **Stdlib only** — the script uses only Python standard library (no pip packages)
+- **Provider selection** — choose between `openai`, `claude`, `flow-openai`, `bedrock`, `openrouter`, and `huggingface` via `--provider`
+- **Automatic retry** — retries failed cells up to 2 more times (3 total attempts)
+
+For detailed usage instructions, see the [Skill Usage Guide](docs/usage/skill_usage.md).
+
+### BCP Story Writing Coach Skill
+
+The `skills/bcp-story-writing-coach/` skill rewrites existing user stories using the **13 BCP dimension scoring rules** as a writing guide. It does **not** calculate BCP, does **not** score, and does **not** invent requirements — it only makes explicit what is already implicit or missing, via a gap-driven questionnaire.
+
+Statistical analysis of BCP batches showed that a significant portion of scoring instability comes from **story writing quality**, not from the model or prompt. No prompt adjustment can fix a poorly written story — the cause must be addressed at the source.
+
+#### Structure
+
+```
+skills/bcp-story-writing-coach/
+├── SKILL.md                              # Skill instructions for the agent
+└── rules/
+    ├── README.md                         # Rules index + how to read
+    ├── d01-business-rules.md             # D1  · Business Rules
+    ├── d02-interface-elements.md         # D2  · Interface Elements
+    ├── d03-boundaries.md                 # D3  · Boundaries
+    ├── d04-roles-permissions.md          # D4  · Roles & Permissions
+    ├── d05-solution-variabilities.md     # D5  · Solution Variabilities
+    ├── d06-domain-entities.md            # D6  · Domain Entities
+    ├── d07-new-domain-entities.md        # D7  · New Domain Entities
+    ├── d08-background-processes.md       # D8  · Background Processes
+    ├── d09-notifications.md              # D9  · Notifications
+    ├── d10-audits.md                     # D10 · Audits
+    ├── d11-quality-attributes.md         # D11 · Quality Attributes (NFR)
+    ├── d12-security-compliance.md        # D12 · Security & Compliance (NFR)
+    └── d13-ux-accessibility.md           # D13 · UX & Accessibility (NFR)
+```
+
+Each rule file describes, in pedagogical format (without exposing scoring tiers or numeric values), what the BCP evaluator looks for in that dimension — and therefore what the story needs to make explicit to be well assessed.
+
+#### How It Works
+
+When the skill is triggered, the agent:
+
+1. **Receives the story** — from inline text, a `.md` file, or a folder of stories
+2. **Static analysis** — determines for each of the 13 dimensions whether it is relevant and covered, relevant with gaps, or not relevant. Uses the `rules/` files as a reading guide (progressive disclosure — only loads files for candidate dimensions)
+3. **Gap-driven questionnaire** — presents gaps to the user in rounds of ~5 questions, prioritized by impact on the assessment. Includes a fallback relevance checklist for stories too vague to detect dimensions with confidence
+4. **Rewrites the story** — incorporates explicit content, implicit content made explicit, and questionnaire answers. Does not add requirements that don't come from these three sources
+5. **Presents the output** — 4 blocks: annotated diff, clean version, rationale per dimension, and unaddressed gaps table
+
+#### Key Principle — No Invention
+
+Every change in the rewritten story must be traceable to one of:
+1. **Explicit content** — already written in the original story
+2. **Implicit content** — direct and obvious deduction from the text
+3. **User response** — obtained via the gap-driven questionnaire
+
+Gaps that the user did not answer are explicitly marked as "unaddressed" in the output, with the impact explained. The skill never fills a gap on its own.
+
+#### Triggers
+
+The skill is designed for pt-BR users (Flow/CI&T). Triggers are in Portuguese by design:
+
+- "Reescreve essa story pra melhorar a qualidade antes de calcular o BCP"
+- "Revisa a story `docs/stories/story-042.md` com o story writing coach"
+- "Essa story tá instável no BCP 13d, melhora a escrita dela"
+- "bcp-story-writing-coach" (direct invocation by name)
+
+#### Key Features
+
+- **No BCP calculation** — this skill improves writing quality, it does not score or calculate BCP. Use `bcp-calculator-13d` for that
+- **No invention** — every change is traceable to explicit content, implicit deduction, or user answers
+- **Gap-driven** — the questionnaire targets only the gaps that matter for the relevant dimensions
+- **Scope gate** — detects epics disguised as stories and recommends splitting before rewriting
+- **Contradiction handling** — treats internal contradictions as blockers, not as ordinary gaps
+- **Language-preserving** — the output follows the language of the original story
+
+For more details, see the skill's `SKILL.md`.
 
 ## License
 

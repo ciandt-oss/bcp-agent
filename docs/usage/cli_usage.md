@@ -36,7 +36,7 @@ The CLI supports the following options:
 |--------|-------------|---------|
 | `--log-level` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) | INFO |
 | `--output-file` | Path to save the output results | None (print to stdout) |
-| `--provider` | LLM provider to use (openai, claude, flow-openai, flow-bedrock) | openai |
+| `--provider` | LLM provider to use (openai, claude, flow-openai, bedrock, openrouter, huggingface) | openai |
 | `--max-workers` | Maximum parallel threads per wave | 5 |
 | `--format` | Output format (text or json) | json |
 

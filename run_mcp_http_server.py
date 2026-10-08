@@ -70,15 +70,21 @@ def main() -> None:
                 os.environ["FLOW_AGENT"] = flow_agent
             if model_name:
                 os.environ["FLOW_MODEL_NAME"] = model_name
-        elif p == "flow-bedrock":
-            if flow_client_id:
-                os.environ["FLOW_CLIENT_ID"] = flow_client_id
-            if flow_client_secret:
-                os.environ["FLOW_CLIENT_SECRET"] = flow_client_secret
+        elif p == "bedrock":
             if flow_base_url:
-                os.environ["FLOW_BASE_URL"] = flow_base_url
+                os.environ["AWS_BEDROCK_REGION"] = flow_base_url
             if model_name:
                 os.environ["FLOW_BEDROCK_MODEL_NAME"] = model_name
+        elif p == "openrouter":
+            if api_key:
+                os.environ["OPENROUTER_API_KEY"] = api_key
+            if model_name:
+                os.environ["OPENROUTER_MODEL_NAME"] = model_name
+        elif p == "huggingface":
+            if api_key:
+                os.environ["HF_TOKEN"] = api_key
+            if model_name:
+                os.environ["HF_MODEL_NAME"] = model_name
 
     @mcp.tool()
     async def calculate_bcp(
@@ -94,9 +100,10 @@ def main() -> None:
     ) -> dict:
         """Calculate BCP via MCP tool.
         - provider: optional. If not provided, defaults to env BCP_PROVIDER or 'openai'.
-        - api_key: optional provider API key override (OPENAI_API_KEY or ANTHROPIC_API_KEY).
+          Supported: openai, claude, flow-openai, bedrock, openrouter, huggingface.
+        - api_key: optional provider API key override.
         - model_name: optional model name override for the selected provider.
-        - flow_*: optional Flow overrides if provider is flow-openai or flow-bedrock.
+        - flow_*: optional Flow overrides if provider is flow-openai or bedrock.
         """
         effective_provider = (provider or os.environ.get("BCP_PROVIDER") or "openai").lower()
         apply_provider_overrides(effective_provider, api_key, model_name, flow_client_id, flow_client_secret, flow_base_url, flow_tenant, flow_agent)

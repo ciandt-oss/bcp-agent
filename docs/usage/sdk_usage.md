@@ -35,7 +35,7 @@ client = BCPClient()
 # Or initialize with specific settings
 client = BCPClient(
     log_level="INFO",  # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    provider="claude"  # LLM provider to use (openai, claude, flow-openai, flow-bedrock)
+    provider="claude"  # LLM provider to use (openai, claude, flow-openai, bedrock, openrouter, huggingface)
 )
 ```
 
@@ -169,7 +169,7 @@ BCPClient(log_level="INFO", provider="openai")
 ```
 
 - `log_level`: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- `provider`: LLM provider to use (openai, claude, flow-openai, flow-bedrock)
+- `provider`: LLM provider to use (openai, claude, flow-openai, bedrock, openrouter, huggingface)
 
 #### Methods
 

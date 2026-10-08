@@ -1,260 +1,294 @@
 ---
 name: bcp-calculator-13d
 description: >
-  Calculates BCP (Business Complexity Points) using the 13-dimensions engine.
-  Runs locally — the agent processes the prompts directly, no external API.
-  Triggers: "calculate BCP 13 dimensions", "bcp 13d", "assess complexity 13d",
-  "BCP 13 dimensions", "how much is this story in BCP 13d", "bcp-calculator-13d".
+  (flow-ciandt) Calculates BCP (Business Complexity Points) using the 13-dimensions engine from the local BCP Calculator API.
+  Use when the user wants to calculate, estimate, or evaluate BCP with the full 13-dimensions model
+  — whether by pasting the story in chat, pointing to a .md file, or a folder of stories.
+  Triggers: "calcular BCP 13 dimensões", "bcp 13d", "avaliar complexidade 13d",
+  "BCP 13 dimensões", "quanto vale essa story em BCP 13d", "bcp-calculator-13d".
 ---
 
-# BCP Calculator 13D — Local Execution
+# BCP Calculator 13D — Local API
 
-BCP (Business Complexity Points) is the complexity metric used in CI&T Flow. This skill runs the 13-dimensions decomposed pipeline locally — the agent itself processes the 14 prompts directly. No external API, no MCP, no SDK. The agent IS the LLM.
+BCP (Business Complexity Points) is the complexity metric used in CI&T's Flow. This skill
+calls the **13-dimensions** engine of the local BCP Calculator API (`run_api_server.py`) to
+calculate BCP from the story title and technical refinement.
 
-The result includes: **BCP Total**, **CMS** (Complexity Maturity Score), **IMS** (INVEST Maturity Score), and the scores of all 13 dimensions (10 functional + 3 NFR).
+It returns the BCP Total, CMS (Complexity Maturity Score), IMS (INVEST Maturity Score), and
+the complete breakdown of all 13 dimensions — 10 functional and 3 non-functional — with
+individual scores and justifications.
 
-## Language
+The skill is responsible only for the **calculation**. Saving results to files is the
+responsibility of the agent that invokes the skill.
 
-Always respond in the user's language. If the user writes in Portuguese, respond in Portuguese. If in English, respond in English. Dimension names and technical terms (Business Rules, Interface Elements, NFR, BCP, CMS, IMS, etc.) remain in English. Translate any prompt output that comes in English to the user's language in the final presentation.
+### Language
 
-## Absolute Determinism
+**Always respond in the same language the user is interacting in.** The API returns summaries,
+classifications, and gaps in English — **translate everything** when presenting the result. Examples:
 
-> **Absolute determinism:** When processing each prompt, return EXACTLY the requested JSON — no variations, no abstractions, no paraphrases, no additions. The prompt defines the output format; follow it rigorously. Do not add extra fields, do not omit required fields, do not reinterpret the instructions. Each cell must produce the same output for the same input, always. If the prompt asks for `{"scores_extracted": [1, 3]}`, return exactly that — not `"scores_extracted": [1, 3, "extra"]` nor `{"scores": [1, 3]}`.
+- `"Demonstrates Good Maturity"` → `"Demonstra Boa Maturidade"` (if pt-BR)
+- `"Eight rules identified with a total score of 20"` → `"Oito regras identificadas com score total de 20"`
+- `"Missing error handling scenarios"` → `"Cenários de tratamento de erro ausentes"`
 
-## Time Warning
+Dimension names (D1 · Business Rules, D12 · Security & Compliance, etc.) and technical
+terms (BCP, CMS, IMS) **keep their original English names** — they are domain terms.
 
-⚠️ The 13D calculation evaluates each story in 14 independent steps. It may take 15-60 seconds per story. Inform the user before starting.
+> **Important:** The 13D calculation runs **14 independent LLM steps** and may take
+15 to 60 seconds per story. Inform the user about the wait time before starting:
 
-## How It Works
-
-The pipeline runs 14 cells in 3 waves:
-
-- **Wave 1:** 10 functional dimension prompts + 1 NFR prompt = 11 cells
-- **Wave 2:** 1 aggregator cell (depends on the 10 functional scores from Wave 1)
-- **Wave 3:** 2 maturity cells (depend on the aggregator + NFR from Wave 1/2)
-
-**Total BCP = aggregator.score + nfr_scoring.score**
-
-Maturity scores (CMS and IMS) are complementary — they do not factor into the Total BCP.
+> ⏳ The BCP 13-dimensions calculation evaluates your story in 14 independent LLM steps.
+> This may take 15 to 60 seconds per story. Please wait...
 
 ---
 
-## Step 1 — Identify the Stories
+## Step 1 — Verify the local server is running
 
-The input can be:
-
-| Format | Description |
-|--------|-------------|
-| Inline text | The user pastes the story directly into the chat |
-| `.md` file | The user provides a path to a `.md` file |
-| Folder | The user provides a path to a folder containing `story-*.md` files |
-
-For `.md` files, extract:
-
-- **Title:** the `title:` field from frontmatter, or the first `# ` heading
-- **Description:** concatenate sections matching "Business Narrative", "Technical Narrative", "Acceptance Criteria" (and synonyms like "Flows", "Preconditions", "User View")
-- **Key:** the `jira_issue:` field from frontmatter, or the filename (without extension)
-
-## Step 2 — Prepare Story Variables
-
-For each story, prepare:
-
-- `key`: traceability ID (jira_issue > filename > STORY-{id})
-- `summary`: the story title
-- `description`: concatenated relevant sections
-
-These variables fill `{{story.key}}`, `{{story.summary}}`, `{{story.description}}` in the prompts.
-
-## Step 3 — Group Stories into Waves
-
-If there are multiple stories: group 3-5 stories per wave. Process each wave completely before moving to the next. Show progress: "Processing wave 1/3 — Story 2/5..."
-
-## Step 4 — Execute Wave 1 (11 Cells)
-
-For each story, process 11 prompts. The prompts and their paths (relative to this skill's directory):
-
-| Cell | Prompt |
-|------|--------|
-| functional_business_rules | `prompts/thirteen/functional/business-rules.md` |
-| functional_interface_elements | `prompts/thirteen/functional/interface-elements.md` |
-| functional_solution_variabilities | `prompts/thirteen/functional/solution-variabilities.md` |
-| functional_domain_entities | `prompts/thirteen/functional/domain-entities.md` |
-| functional_new_domain_entities | `prompts/thirteen/functional/new-domain-entities.md` |
-| functional_roles_permissions | `prompts/thirteen/functional/roles-permissions.md` |
-| functional_boundaries | `prompts/thirteen/functional/boundaries.md` |
-| functional_background_processes | `prompts/thirteen/functional/background-processes.md` |
-| functional_notifications | `prompts/thirteen/functional/notifications.md` |
-| functional_audits | `prompts/thirteen/functional/audits.md` |
-| nfr_scoring | `prompts/thirteen/nfr-scoring.md` |
-
-For each prompt:
-
-1. Read the `.md` file from this skill's `prompts/` directory (relative to the SKILL.md location)
-2. Replace `{{story.key}}`, `{{story.summary}}`, `{{story.description}}` with the story's values
-3. Process the prompt — you ARE the LLM. Follow the prompt's instructions exactly. Return ONLY the specified JSON.
-4. Extract the JSON from your response
-5. Store the raw JSON output for this cell
-
-## Step 5 — Execute Wave 2 (Aggregator)
-
-Read `prompts/thirteen/functional/aggregator.md`. Replace:
-
-- `{{story.key}}`, `{{story.summary}}`, `{{story.description}}` — story variables
-- `{{dim_business_rules}}`, `{{dim_interface_elements}}`, `{{dim_solution_variabilities}}`, `{{dim_domain_entities}}`, `{{dim_new_domain_entities}}`, `{{dim_roles_permissions}}`, `{{dim_boundaries}}`, `{{dim_background_processes}}`, `{{dim_notifications}}`, `{{dim_audits}}` — the numeric scores extracted from Wave 1
-
-Process the prompt, extract the JSON, store the raw output.
-
-## Step 6 — Execute Wave 3 (Maturity)
-
-Two prompts in parallel:
-
-| Cell | Prompt |
-|------|--------|
-| complexity_maturity | `prompts/thirteen/complexity-maturity.md` |
-| invest_maturity | `prompts/thirteen/invest-maturity.md` |
-
-For each, replace:
-
-- `{{story.key}}`, `{{story.summary}}`, `{{story.description}}` — story variables
-- `{{functional_scoring}}` — the complete JSON output from the aggregator (Wave 2)
-- `{{nfr_scoring}}` — the complete JSON output from nfr_scoring (Wave 1)
-
-Process each prompt, extract the JSON, store the raw output.
-
-## Step 7 — Calculate Scores with the Script
-
-Use the bundled script to calculate scores and consolidate:
+The skill calls the local BCP Calculator API (`run_api_server.py`), which runs by default at
+`http://127.0.0.1:8000`. Before proceeding, verify that the server is active:
 
 ```bash
-# For each cell, calculate the score:
-python scripts/bcp_pipeline.py score --cell business_rules --output '{"scores_extracted": [3, 5]}'
-
-# For the aggregator:
-python scripts/bcp_pipeline.py aggregate --bindings '{"dim_business_rules": 8, ...}'
-
-# To consolidate a complete story:
-python scripts/bcp_pipeline.py consolidate --input story_results.json
-
-# To aggregate multiple stories:
-python scripts/bcp_pipeline.py aggregate-stories --input all_stories.json
+curl -s http://127.0.0.1:8000/ || echo "SERVER OFFLINE"
 ```
 
-## Score Formulas
+- **Online:** proceed to Step 2.
+- **Offline:** guide the user to start the server:
+  ```bash
+  cd projects/bcp-agent
+  python run_api_server.py
+  ```
+  Wait for confirmation that the server started (`"Starting BCP Calculator API server on 127.0.0.1:8000"`)
+  before continuing.
 
-The 14 formulas used to calculate each cell's score from the JSON output:
+> The local API **does not require authentication** — the local server accepts requests
+> directly, without a token.
 
-| Cell | Formula |
-|------|---------|
-| business_rules | Sum all values in the `scores_extracted` array |
-| interface_elements | `ceil(len(static_elements)/5) × static_weight + ceil(len(dynamic_elements)/5) × dynamic_weight` |
-| solution_variabilities | Direct value from the `dimension_solution_variabilities` field |
-| domain_entities | Direct value from the `dimension_domain_entities` field |
-| new_domain_entities | `2 × ceil(len(block_a_modified)/3) + 5 × ceil(len(block_b_new)/3)` |
-| roles_permissions | Direct value from the `dimension_roles_permissions` field |
-| boundaries | Sum all values in the `scores_extracted` array |
-| background_processes | Direct value from the `dimension_background_processes` field |
-| notifications | Count elements in the `notification_events` array |
-| audits | Count elements in the `audited_entities` array |
-| nfr_scoring | Sum `dimension_quality_attributes + dimension_security_compliance + dimension_user_experience_accessibility` |
-| aggregator | Sum the 10 `dim_*` scores |
-| complexity_maturity | Direct value from the `score` field (0-5) |
-| invest_maturity | Direct value from the `score` field (0-5) |
+---
 
-**Total BCP = aggregator.score + nfr_scoring.score**
+## Step 2 — Identify the stories
 
-## Step 8 — Present the Result
+| Source | How to obtain |
+|--------|---------------|
+| Text in chat | Extract title and relevant sections directly |
+| Single `.md` file | Use `--file` — the script extracts automatically |
+| Folder | Glob to list `story-*.md` files, use `--file` for each |
 
-### Single Story
+For each story:
 
-Present the following tables:
+- **`.md` file:** pass `--file path/to/story.md`. The script automatically extracts the title
+  (frontmatter `title:` or first `# `) and composes the `description` by concatenating the sections:
+  - `## Narrativa de Negócio` (Business Narrative — includes `### Regras de Negócio` (Business Rules) and relevant `### Edge Cases`)
+  - `## Narrativa Técnica` (Technical Narrative)
+  - `## Critérios de Aceite` (Acceptance Criteria)
 
-**Summary:**
+- **Inline text:** pass `--title` and `--description` with the content of the same sections above.
+- `id` — incremental index (0, 1, 2…) if no explicit ID
 
-| Metric | Value |
-|--------|-------|
-| BCP Total | {total_bcp} |
-| CMS (Complexity Maturity) | {complexity_maturity_score}/5 — {classification} |
-| IMS (INVEST Maturity) | {invest_maturity_score}/5 — {classification} |
+> If the script returns a "No relevant sections found" error, the story is incomplete — notify
+> the user and do not proceed with the calculation.
 
-**Functional Dimensions (D1-D10):**
+If the user triggers the skill **without providing a story**, request the content before
+proceeding. Do not attempt to calculate without input.
 
-| ID | Dimension | Score |
-|----|-----------|-------|
-| D1 | Business Rules | {score} |
-| D2 | Interface Elements | {score} |
-| D3 | Solution Variabilities | {score} |
-| D4 | Domain Entities | {score} |
-| D5 | New Domain Entities | {score} |
-| D6 | Roles & Permissions | {score} |
-| D7 | Boundaries | {score} |
-| D8 | Background Processes | {score} |
-| D9 | Notifications | {score} |
-| D10 | Audits | {score} |
-| | **Functional Subtotal** | **{aggregator_score}** |
+---
 
-**NFR Dimensions (D11-D13):**
+## Step 3 — Calculate BCP via script
 
-| ID | Dimension | Score |
-|----|-----------|-------|
-| D11 | Quality Attributes | {score} |
-| D12 | Security & Compliance | {score} |
-| D13 | UX & Accessibility | {score} |
-| | **NFR Subtotal** | **{nfr_score}** |
+Use the bundled script for each story. The script encapsulates the API call and returns JSON:
 
-**Complexity Maturity:**
+```bash
+python /path/to/skill/scripts/bcp_calculate_13d.py \
+  --file path/to/story.md \
+  --id 0
+```
 
-| Criterion | Value |
-|-----------|-------|
-| Clarity | {clarity}/5 |
-| Completeness | {completeness}/5 |
-| Explicit Definitions | {explicit_definitions}/5 |
-| Testability | {testability}/5 |
-| Business Value | {business_value}/5 |
-| **Score** | **{score}/5 — {classification}** |
+Or with inline text:
 
-Gaps: list each item from the `gaps` array. Questions: list each item from the `questions` array.
+```bash
+python /path/to/skill/scripts/bcp_calculate_13d.py \
+  --title "Story Title" \
+  --description "Complete technical refinement" \
+  --id 0
+```
 
-**INVEST Maturity:**
+With explicit LLM provider:
 
-| Criterion | Value |
-|-----------|-------|
-| Independent | {independent}/5 |
-| Negotiable | {negotiable}/5 |
-| Valuable | {valuable}/5 |
-| Estimable | {estimable}/5 |
-| Small | {small}/5 |
-| Testable | {testable}/5 |
-| **Score** | **{score}/5 — {classification}** |
+```bash
+python /path/to/skill/scripts/bcp_calculate_13d.py \
+  --file path/to/story.md \
+  --provider openai
+```
 
-Gaps: list each item from the `gaps` array. Questions: list each item from the `questions` array.
+> The script path is relative to the skill location. Use the absolute path when executing.
 
-### Batch (Multiple Stories)
+### Complete parameter reference
 
-First, a summary table:
+| Parameter | Required | Default | Description |
+|-----------|:---------:|---------|-------------|
+| `--file` | ⚠️ exclusive with `--title` | — | Path to `.md` file — extracts title and sections automatically |
+| `--title` | ⚠️ exclusive with `--file` | — | Story title (requires `--description`) |
+| `--description` | ✅ when `--title` | — | Complete technical refinement/description |
+| `--id` | ❌ | `0` | Numeric incremental ID for batch identification |
+| `--key` | ❌ | auto | Traceability key. Fallback: frontmatter `jira_issue:` → filename → `STORY-{id}` |
+| `--base-url` | ❌ | `http://127.0.0.1:8000` | Local API base URL — allows pointing to a different port/host |
+| `--provider` | ❌ | `openai` | LLM provider. Options: `openai`, `claude`, `flow-openai` |
 
-| Story | Key | BCP Total | Functional | NFR | CMS | IMS |
-|-------|-----|-----------|------------|-----|-----|-----|
-| {summary} | {key} | {total_bcp} | {functional} | {nfr} | {cms}/5 | {ims}/5 |
+**Two mutually exclusive modes:**
+- **`--file`** → extracts title (frontmatter `title:` or `# `) + relevant sections automatically
+- **`--title` + `--description`** → text passed directly
 
-Then, the individual details for each story in the same format as the single story.
+For large batches (>5 stories), process in groups of up to 5 and show progress to the user:
+`"Calculating story 2/5..."`
 
-## Trigger Examples
+> **Sequential processing:** each story is calculated individually (~15-60s). For 10
+> stories, total time is ~3-10 min. There is no parallelism — the API processes one at a time.
 
-- "Calculate BCP 13 dimensions for this story: ..."
-- "Calculate BCP 13d for the file `docs/stories/story-001.md`"
-- "Calculate BCP 13d for all stories in the folder `docs/PRD/sprint-42/`"
-- "bcp-calculator-13d"
+### Retry on failure
 
-## Complete Flow Summary
+If the script returns `"has_failures": true`, re-run the call (up to 2 retries).
+The script already does internal retries, but if the final result still has failures, inform the user:
+
+> ❌ Could not calculate complete BCP — X dimensions failed after 3 attempts.
+> Try again later or verify that the API is stable.
+
+### Error codes
+
+| HTTP | Action |
+|------|--------|
+| 404 | Job not found — server may have restarted (jobs are in-memory). Re-run |
+| 400 | Invalid data — verify that `title` and `description` are filled |
+| 5xx | Server error — wait and try again; if persistent, inform the user |
+| Conn | Server offline — guide the user to start `python run_api_server.py` |
+
+---
+
+## Step 4 — Present the result
+
+### Single story
 
 ```
-Warning:  Inform wait time (~15-60s per story)
-Step 1: Identify stories (inline, --file, or folder)
-Step 2: Prepare variables (key, summary, description)
-Step 3: Group into waves (3-5 stories per wave if batch)
-Step 4: Wave 1 — process 11 prompts per story
-Step 5: Wave 2 — process aggregator with Wave 1 bindings
-Step 6: Wave 3 — process 2 maturity prompts with Wave 2 + NFR bindings
-Step 7: Calculate scores and consolidate via bcp_pipeline.py
-Step 8: Present results (tables)
+## BCP 13D — <story name>
+
+**BCP Total:** X points
+**CMS (Complexity Maturity Score):** Y/5 — <classification>
+**IMS (INVEST Maturity Score):** Z/5 — <classification>
+
+### Functional Dimensions (D1–D10)
+| # | Dimension | Score | Details |
+|---|----------|------:|---------|
+| D1 | Business Rules | X | <summary> · Items: <items joined by "; "> · Reasoning: <reasoning> |
+| D2 | Interface Elements | X | <detail> |
+| D3 | Boundaries | X | <detail> |
+| D4 | Roles & Permissions | X | <detail> |
+| D5 | Solution Variabilities | X | <detail> |
+| D6 | Domain Entities | X | <detail> |
+| D7 | New Domain Entities | X | <detail> |
+| D8 | Background Processes | X | <detail> |
+| D9 | Notifications | X | <detail> |
+| D10 | Audits | X | <detail> |
+
+> The **Details** column combines up to 3 fields separated by " · ":
+> `summary` (always present) + `Items: <items>` (if any) + `Reasoning: <reasoning>` (if any).
+> If items or reasoning are empty, omit that part — do not show "Items: —".
+
+### Non-Functional Dimensions (D11–D13)
+| # | Dimension | Score | Details |
+|---|----------|------:|---------|
+| D11 | Quality Attributes | X | <assessment> · <detailed_explanation> |
+| D12 | Security & Compliance | X | <assessment> · <detailed_explanation> |
+| D13 | UX & Accessibility | X | <assessment> · <detailed_explanation> |
+
+> The **Details** column combines `assessment` + `detailed_explanation` separated by " · ".
+> If detailed_explanation is empty, show only the assessment.
+
+### Maturity — Complexity (CMS)
+<summary returned by the API>
+
+| Sub-criterion | Score |
+|---------------|------:|
+| Clarity | X/5 |
+| Completeness | X/5 |
+| Explicit definitions | X/5 |
+| Testability | X/5 |
+| Business value | X/5 |
+
+**Identified gaps:**
+- <gap 1>
+- <gap 2>
+
+### Maturity — INVEST (IMS)
+<summary returned by the API>
+
+| Sub-criterion | Score |
+|---------------|------:|
+| Independent | X/5 |
+| Negotiable | X/5 |
+| Valuable | X/5 |
+| Estimable | X/5 |
+| Small | X/5 |
+| Testable | X/5 |
+
+**Identified gaps:**
+- <gap 1>
+- <gap 2>
+```
+
+The fields are extracted from the JSON returned by the script:
+- `bcp_total` → BCP Total
+- `story_name` → story name
+- `cms.score`, `cms.classification`, `cms.summary`, `cms.gaps` → CMS section
+- `cms.breakdown` → CMS sub-criteria table (clarity, completeness, explicit_definitions, testability, business_value)
+- `ims.score`, `ims.classification`, `ims.summary`, `ims.gaps` → IMS section
+- `ims.breakdown` → INVEST sub-criteria table (independent, negotiable, valuable, estimable, small, testable)
+- `functional_dimensions[].id`, `.name`, `.score`, `.summary`, `.items`, `.reasoning` → Functional Dimensions table
+- `nfr_dimensions[].id`, `.name`, `.score`, `.summary`, `.detailed_explanation` → Non-Functional Dimensions table
+
+**Translation:** The fields `summary`, `classification`, `gaps`, and `questions` come in English from the API.
+Translate to the user's language when presenting. Keep dimension names
+(D1 · Business Rules, etc.) and technical terms (BCP, CMS, IMS) in English.
+
+### Batch (multiple stories)
+
+Present the summary table first, then individual details:
+
+```
+## BCP 13D — Batch (N stories)
+
+| # | Story | BCP | CMS | IMS |
+|---|-------|-----|-----|-----|
+| 1 | Name 1 | X   | Y/5 | Z/5 |
+| 2 | Name 2 | X   | Y/5 | Z/5 |
+|   | **Total** | **X** | — | — |
+
+**Average BCP:** W pts
+**Highest complexity:** <story with highest BCP>
+**Lowest complexity:** <story with lowest BCP>
+```
+
+After the summary table, present the individual details for each story in the
+"Single story" format above.
+
+Errors in one story do not interrupt processing of the others — record the error in
+the corresponding row of the table and continue.
+
+---
+
+## Trigger examples
+
+The skill is designed for pt-BR users (Flow/CI&T). Triggers are in Portuguese by design:
+
+- "Calcula o BCP 13 dimensões dessa história: Título: Exportar relatório CSV..."
+- "Calcula o BCP 13d do arquivo `docs/stories/story-001.md`"
+- "Calcula o BCP 13d de todas as histórias na pasta `docs/PRD/sprint-42/`"
+- "Quanto vale essa story em BCP 13 dimensões?" (with story pasted in chat)
+- "bcp-calculator-13d" (direct invocation by name)
+- "Avaliar complexidade 13d do arquivo `planning/story-login.md`"
+
+## Complete flow summary
+
+```
+Notice:  Inform wait time (~15-60s per story)
+Step 1:  Verify the local server (run_api_server.py) is running at http://127.0.0.1:8000
+Step 2:  Identify story title and description (via script --file or inline)
+Step 3:  Call script bcp_calculate_13d.py → retry if has_failures
+Step 4:  Present result with BCP total, CMS, IMS, 13 dimensions, and gaps
 ```

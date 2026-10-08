@@ -15,7 +15,7 @@ async def calculate_bcp(story_content: str, provider: str = "openai") -> dict:
 
     Args:
         story: User story content
-        provider: LLM provider to use (openai, claude, flow-openai, flow-bedrock)
+        provider: LLM provider to use (openai, claude, flow-openai, bedrock, openrouter, huggingface)
     """
     calculator = BCPCalculator(logger, provider_name=provider)
     result = calculator.calculate_bcp(story_content)
