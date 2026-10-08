@@ -274,3 +274,62 @@ def test_flow_litellm_includes_flow_headers(mock_post):
     headers = call_args[1]["headers"]
     assert headers["FlowTenant"] == "my-tenant"
     assert headers["FlowAgent"] == "my-agent"
+
+
+# --- 400 fallback for reasoning models that don't support reasoning_effort="none" ---
+
+@patch("bcp.llm_providers.requests.post")
+def test_flow_litellm_400_fallback_removes_reasoning_effort_and_temperature(mock_post):
+    """When a reasoning model rejects reasoning_effort='none' with HTTP 400, the retry
+    should remove reasoning_effort, temperature, and revert max_completion_tokens to max_tokens."""
+    import copy
+
+    # Capture payloads at call time (the code mutates the dict in-place for retry)
+    captured_payloads = []
+
+    def capture_and_respond(*args, **kwargs):
+        captured_payloads.append(copy.deepcopy(kwargs.get("json", {})))
+        call_index = len(captured_payloads) - 1
+        if call_index == 0:
+            bad_response = MagicMock()
+            bad_response.status_code = 400
+            bad_response.text = '{"error": "reasoning_effort none not supported"}'
+            return bad_response
+        else:
+            good_response = MagicMock()
+            good_response.status_code = 200
+            good_response.json.return_value = {
+                "choices": [{"message": {"content": "test response"}}]
+            }
+            good_response.raise_for_status = MagicMock()
+            return good_response
+
+    mock_post.side_effect = capture_and_respond
+
+    model = FlowLiteLLMChatModel(
+        base_url="https://example.com/flow-litellm",
+        flow_tenant="test-tenant",
+        flow_agent="test-agent",
+        model_name="gpt-6-astra",
+        temperature=0,
+        max_tokens=4096,
+        api_key="test-token",
+    )
+    model._generate([HumanMessage(content="hello")])
+
+    # Verify two calls were made
+    assert len(captured_payloads) == 2
+
+    # First call should have reasoning_effort, temperature, max_completion_tokens
+    first_payload = captured_payloads[0]
+    assert first_payload["reasoning_effort"] == "none"
+    assert first_payload["temperature"] == 0
+    assert first_payload["max_completion_tokens"] == 4096
+
+    # Second call (retry) should NOT have reasoning_effort or temperature,
+    # and max_completion_tokens should be reverted to max_tokens
+    second_payload = captured_payloads[1]
+    assert "reasoning_effort" not in second_payload
+    assert "temperature" not in second_payload
+    assert "max_completion_tokens" not in second_payload
+    assert second_payload["max_tokens"] == 4096

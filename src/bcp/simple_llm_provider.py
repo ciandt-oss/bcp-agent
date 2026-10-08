@@ -25,6 +25,7 @@ from typing import Dict, Optional
 import httpx
 
 from .llm_providers import LLMProvider
+from .model_utils import build_chat_params
 
 
 # API keys that are considered placeholders — no auth header is sent for these
@@ -103,7 +104,6 @@ class SimpleLLMProvider(LLMProvider):
             Exception: On other errors
         """
         url = f"{self.base_url}/chat/completions"
-        from .model_utils import build_chat_params
         payload = build_chat_params(
             model=self.model,
             temperature=self.temperature,
@@ -124,13 +124,18 @@ class SimpleLLMProvider(LLMProvider):
             response = httpx.post(url, json=payload, headers=headers, timeout=self.timeout)
 
             # Fallback: some models (e.g. gpt-6-astra) don't support reasoning_effort="none"
-            # and return HTTP 400. Retry without reasoning_effort, falling back to model default.
+            # and return HTTP 400. When reasoning is on (the default), temperature is also
+            # not accepted. Retry with a clean non-reasoning payload: remove reasoning_effort,
+            # remove temperature, and revert max_completion_tokens back to max_tokens.
             if response.status_code == 400 and "reasoning_effort" in payload:
                 self.logger.warning(
                     f"HTTP 400 with reasoning_effort='none' — model may not support it. "
-                    f"Retrying without reasoning_effort (model default will apply)."
+                    f"Retrying without reasoning_effort and temperature (model defaults will apply)."
                 )
                 payload.pop("reasoning_effort")
+                payload.pop("temperature", None)
+                if "max_completion_tokens" in payload:
+                    payload["max_tokens"] = payload.pop("max_completion_tokens")
                 response = httpx.post(url, json=payload, headers=headers, timeout=self.timeout)
 
             response.raise_for_status()

@@ -206,3 +206,39 @@ def test_bedrock_invoke_includes_temperature_for_claude(mock_post, logger, monke
     payload = mock_post.call_args[1]["json"]
     assert payload["inferenceConfig"]["temperature"] == 0
     assert payload["inferenceConfig"]["maxTokens"] == 4096
+
+
+@patch("bcp.bedrock_provider.httpx.post")
+def test_bedrock_invoke_reasoning_model_sends_additional_fields(mock_post, logger, monkeypatch):
+    """Reasoning models should pass reasoning_effort='none' via additionalModelRequestFields."""
+    monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "test-token")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "output": {"message": {"content": [{"text": "Response"}]}}
+    }
+    mock_response.raise_for_status = MagicMock()
+    mock_post.return_value = mock_response
+
+    provider = BedrockProvider(logger, model_name="openai.gpt-5.6-luna")
+    provider.invoke("Hello")
+
+    payload = mock_post.call_args[1]["json"]
+    assert payload["additionalModelRequestFields"]["reasoning_effort"] == "none"
+
+
+@patch("bcp.bedrock_provider.httpx.post")
+def test_bedrock_invoke_non_reasoning_no_additional_fields(mock_post, logger, monkeypatch):
+    """Non-reasoning models should NOT send additionalModelRequestFields."""
+    monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "test-token")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "output": {"message": {"content": [{"text": "Response"}]}}
+    }
+    mock_response.raise_for_status = MagicMock()
+    mock_post.return_value = mock_response
+
+    provider = BedrockProvider(logger, model_name="anthropic.claude-sonnet-4-6")
+    provider.invoke("Hello")
+
+    payload = mock_post.call_args[1]["json"]
+    assert "additionalModelRequestFields" not in payload

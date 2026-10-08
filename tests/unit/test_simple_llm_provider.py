@@ -233,3 +233,58 @@ def test_invoke_includes_temperature_for_non_reasoning(mock_post, logger, monkey
     payload = mock_post.call_args[1]["json"]
     assert payload["temperature"] == 0
     assert "max_tokens" in payload
+
+
+# --- 400 fallback for reasoning models that don't support reasoning_effort="none" ---
+
+@patch("bcp.simple_llm_provider.httpx.post")
+def test_invoke_400_fallback_removes_reasoning_effort_and_temperature(mock_post, logger, monkeypatch):
+    """When a reasoning model rejects reasoning_effort='none' with HTTP 400, the retry
+    should remove reasoning_effort, temperature, and revert max_completion_tokens to max_tokens."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    # Capture payloads at call time (the code mutates the dict in-place for retry)
+    captured_payloads = []
+
+    def capture_and_respond(*args, **kwargs):
+        # Deep copy the json payload at call time
+        import copy
+        captured_payloads.append(copy.deepcopy(kwargs.get("json", {})))
+        call_index = len(captured_payloads) - 1
+        if call_index == 0:
+            # First call returns 400
+            bad_response = MagicMock()
+            bad_response.status_code = 400
+            bad_response.text = '{"error": "reasoning_effort none not supported"}'
+            return bad_response
+        else:
+            # Second call returns 200
+            good_response = MagicMock()
+            good_response.status_code = 200
+            good_response.json.return_value = {"choices": [{"message": {"content": "Response"}}]}
+            good_response.raise_for_status = MagicMock()
+            return good_response
+
+    mock_post.side_effect = capture_and_respond
+
+    provider = SimpleLLMProvider(logger, model="gpt-6-astra", base_url="http://localhost:8080/v1")
+    result = provider.invoke("Hello")
+
+    # Verify two calls were made
+    assert len(captured_payloads) == 2
+
+    # First call should have reasoning_effort, temperature, max_completion_tokens
+    first_payload = captured_payloads[0]
+    assert first_payload["reasoning_effort"] == "none"
+    assert first_payload["temperature"] == 0
+    assert first_payload["max_completion_tokens"] == 4096
+
+    # Second call (retry) should NOT have reasoning_effort or temperature,
+    # and max_completion_tokens should be reverted to max_tokens
+    second_payload = captured_payloads[1]
+    assert "reasoning_effort" not in second_payload
+    assert "temperature" not in second_payload
+    assert "max_completion_tokens" not in second_payload
+    assert second_payload["max_tokens"] == 4096
+
+    assert result == "Response"

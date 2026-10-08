@@ -26,6 +26,8 @@ from langchain_core.runnables import RunnableLambda
 from pydantic import Field, model_validator
 import requests
 
+from .model_utils import is_reasoning_model
+
 
 class LLMProvider(ABC):
     """Base abstract class for LLM providers."""
@@ -135,9 +137,8 @@ class ClaudeProvider(LLMProvider):
         thinking = os.environ.get("ANTHROPIC_THINKING", '{"type": "disabled"}')
         reasoning_effort = os.environ.get("ANTHROPIC_REASONING_EFFORT", "low")
 
-        import json as _json
         try:
-            kwargs["thinking"] = _json.loads(thinking)
+            kwargs["thinking"] = json.loads(thinking)
         except (ValueError, TypeError):
             pass  # Invalid JSON — skip, let API default apply
 
@@ -229,7 +230,6 @@ class FlowLiteLLMChatModel(BaseChatModel):
 
         url = f"{base_url}/v1/chat/completions"
 
-        from .model_utils import is_reasoning_model
         if is_reasoning_model(model_name):
             payload = {
                 "model": model_name,
@@ -253,9 +253,13 @@ class FlowLiteLLMChatModel(BaseChatModel):
             response = requests.post(url, json=payload, headers=headers)
 
             # Fallback: some models (e.g. gpt-6-astra) don't support reasoning_effort="none"
-            # and return HTTP 400. Retry without reasoning_effort.
+            # and return HTTP 400. When reasoning is on, temperature is also not accepted.
+            # Retry with a clean non-reasoning payload.
             if response.status_code == 400 and "reasoning_effort" in payload:
                 payload.pop("reasoning_effort")
+                payload.pop("temperature", None)
+                if "max_completion_tokens" in payload:
+                    payload["max_tokens"] = payload.pop("max_completion_tokens")
                 response = requests.post(url, json=payload, headers=headers)
 
             response.raise_for_status()
