@@ -13,6 +13,7 @@ from .formula_evaluator import FormulaEvaluator
 from .llm_providers import get_provider, LLMProvider, OpenAIProvider, ClaudeProvider
 from .simple_llm_provider import SimpleLLMProvider
 from .bedrock_provider import BedrockProvider
+from .model_utils import is_reasoning_model, build_chat_params
 from .logger import setup_logger, StepLogger
 
 __all__ = [
@@ -24,6 +25,8 @@ __all__ = [
     'ClaudeProvider',
     'SimpleLLMProvider',
     'BedrockProvider',
+    'is_reasoning_model',
+    'build_chat_params',
     'get_provider',
     'setup_logger',
     'StepLogger',

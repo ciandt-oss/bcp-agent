@@ -96,12 +96,14 @@ class BedrockProvider(LLMProvider):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}",
         }
+        from .model_utils import is_reasoning_model
+        inference_config = {}
+        if not is_reasoning_model(self.model_name):
+            inference_config["temperature"] = self.temperature
+        inference_config["maxTokens"] = self.max_tokens
         payload = {
             "messages": [{"role": "user", "content": [{"text": prompt}]}],
-            "inferenceConfig": {
-                "temperature": self.temperature,
-                "maxTokens": self.max_tokens,
-            },
+            "inferenceConfig": inference_config,
         }
 
         self.logger.debug(

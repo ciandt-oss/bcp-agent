@@ -121,8 +121,28 @@ class ClaudeProvider(LLMProvider):
 
         Returns:
             The Claude model
+
+        Note:
+            For maximum determinism in BCP scoring, the model is configured with:
+            - temperature=0 (no sampling randomness)
+            - thinking={"type": "disabled"} (disables adaptive thinking)
+            - reasoning_effort="low" (minimizes reasoning variation)
+            These can be overridden via ANTHROPIC_THINKING and ANTHROPIC_REASONING_EFFORT env vars.
         """
         kwargs = {"model": self.model_name, "temperature": self.temperature}
+
+        # Determinism settings — can be overridden via env vars
+        thinking = os.environ.get("ANTHROPIC_THINKING", '{"type": "disabled"}')
+        reasoning_effort = os.environ.get("ANTHROPIC_REASONING_EFFORT", "low")
+
+        import json as _json
+        try:
+            kwargs["thinking"] = _json.loads(thinking)
+        except (ValueError, TypeError):
+            pass  # Invalid JSON — skip, let API default apply
+
+        kwargs["reasoning_effort"] = reasoning_effort
+
         if self.base_url:
             kwargs["anthropic_api_url"] = self.base_url
         return ChatAnthropic(**kwargs)
@@ -209,11 +229,14 @@ class FlowLiteLLMChatModel(BaseChatModel):
 
         url = f"{base_url}/v1/chat/completions"
 
-        model_lower = model_name.lower()
-        if "gpt-5" in model_lower or "nano" in model_lower:
+        from .model_utils import is_reasoning_model
+        if is_reasoning_model(model_name):
             payload = {
                 "model": model_name,
                 "messages": flow_messages,
+                "reasoning_effort": "none",
+                "temperature": temperature,
+                "max_completion_tokens": max_tokens,
             }
         else:
             payload = {
@@ -228,6 +251,13 @@ class FlowLiteLLMChatModel(BaseChatModel):
 
         try:
             response = requests.post(url, json=payload, headers=headers)
+
+            # Fallback: some models (e.g. gpt-6-astra) don't support reasoning_effort="none"
+            # and return HTTP 400. Retry without reasoning_effort.
+            if response.status_code == 400 and "reasoning_effort" in payload:
+                payload.pop("reasoning_effort")
+                response = requests.post(url, json=payload, headers=headers)
+
             response.raise_for_status()
             data = response.json()
 

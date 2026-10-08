@@ -141,17 +141,26 @@ python run_cli.py story.md --provider openai
 
 Connects directly to the Anthropic API using `langchain-anthropic`.
 
+Configured for maximum determinism in BCP scoring:
+- `temperature=0` — no sampling randomness
+- `thinking={"type": "disabled"}` — disables adaptive thinking (always-on by default in Claude models)
+- `reasoning_effort="low"` — minimizes reasoning variation
+
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | — | Your Anthropic API key |
 | `ANTHROPIC_BASE_URL` | No | `https://api.anthropic.com` | Base URL (use for proxies or Anthropic-compatible endpoints) |
 | `ANTHROPIC_MODEL_NAME` | No | `claude-sonnet-4-6` | Model to use |
+| `ANTHROPIC_THINKING` | No | `{"type": "disabled"}` | Thinking config JSON — disables adaptive thinking for determinism |
+| `ANTHROPIC_REASONING_EFFORT` | No | `low` | Reasoning effort (`low`, `medium`, `high`, `xhigh`, `max`) |
 
 **.env example:**
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
 ANTHROPIC_BASE_URL=https://api.anthropic.com
 ANTHROPIC_MODEL_NAME=claude-sonnet-4-6
+ANTHROPIC_THINKING={"type": "disabled"}
+ANTHROPIC_REASONING_EFFORT=low
 ```
 
 **Usage:**

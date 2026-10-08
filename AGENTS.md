@@ -118,7 +118,7 @@ Key variables per provider:
 
 **OpenAI:** `OPENAI_API_KEY`, `OPENAI_BASE_URL` (optional), `OPENAI_MODEL_NAME` (default: `gpt-6-luna`)
 
-**Claude:** `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` (optional), `ANTHROPIC_MODEL_NAME` (default: `claude-sonnet-4-6`)
+**Claude:** `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` (optional), `ANTHROPIC_MODEL_NAME` (default: `claude-sonnet-4-6`), `ANTHROPIC_THINKING` (optional, default: `{"type": "disabled"}` — disables adaptive thinking for determinism), `ANTHROPIC_REASONING_EFFORT` (optional, default: `low` — values: `low`, `medium`, `high`, `xhigh`, `max`)
 
 **Flow OpenAI:** `FLOW_LLM_LITE_HOST`, `FLOW_LITELLM_TOKEN_JWT`, `FLOW_TENANT` (optional), `FLOW_AGENT` (optional), `FLOW_LITELLM_MODEL_NAME` (optional, default: `gpt-6-luna`), `FLOW_LITELLM_MAX_TOKENS` (optional, default: `4096`), `FLOW_LITELLM_TEMPERATURE` (optional, default: `0`)
 

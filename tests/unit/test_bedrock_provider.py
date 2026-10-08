@@ -99,7 +99,7 @@ def test_bedrock_invoke_converse_request_format(mock_post, logger, monkeypatch):
     mock_response.raise_for_status = MagicMock()
     mock_post.return_value = mock_response
 
-    provider = BedrockProvider(logger, temperature=0, max_tokens=2048)
+    provider = BedrockProvider(logger, model_name="anthropic.claude-sonnet-4-6", temperature=0, max_tokens=2048)
     provider.invoke("Tell me a joke")
 
     call_args = mock_post.call_args
@@ -168,3 +168,41 @@ def test_bedrock_invoke_raises_on_missing_content_key(mock_post, logger, monkeyp
     provider = BedrockProvider(logger)
     with pytest.raises(ValueError, match="No content found"):
         provider.invoke("Hello")
+
+
+# --- Reasoning model temperature handling ---
+
+@patch("bcp.bedrock_provider.httpx.post")
+def test_bedrock_invoke_omits_temperature_for_gpt6(mock_post, logger, monkeypatch):
+    monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "test-token")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "output": {"message": {"content": [{"text": "Response"}]}}
+    }
+    mock_response.raise_for_status = MagicMock()
+    mock_post.return_value = mock_response
+
+    provider = BedrockProvider(logger, model_name="openai.gpt-5.6-luna")
+    provider.invoke("Hello")
+
+    payload = mock_post.call_args[1]["json"]
+    assert "temperature" not in payload["inferenceConfig"]
+    assert payload["inferenceConfig"]["maxTokens"] == 4096
+
+
+@patch("bcp.bedrock_provider.httpx.post")
+def test_bedrock_invoke_includes_temperature_for_claude(mock_post, logger, monkeypatch):
+    monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "test-token")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "output": {"message": {"content": [{"text": "Response"}]}}
+    }
+    mock_response.raise_for_status = MagicMock()
+    mock_post.return_value = mock_response
+
+    provider = BedrockProvider(logger, model_name="anthropic.claude-sonnet-4-6")
+    provider.invoke("Hello")
+
+    payload = mock_post.call_args[1]["json"]
+    assert payload["inferenceConfig"]["temperature"] == 0
+    assert payload["inferenceConfig"]["maxTokens"] == 4096

@@ -188,13 +188,41 @@ def test_flow_litellm_payload_omits_temperature_for_gpt5(mock_post):
 
     call_args = mock_post.call_args
     payload = call_args[1]["json"]
-    assert "temperature" not in payload
+    assert payload["reasoning_effort"] == "none"
+    assert payload["temperature"] == 0
+    assert payload["max_completion_tokens"] == 4096
     assert "max_tokens" not in payload
     assert payload["model"] == "gpt-5-nano"
 
 
 @patch("bcp.llm_providers.requests.post")
-def test_flow_litellm_payload_includes_temperature_for_non_gpt5(mock_post):
+def test_flow_litellm_payload_includes_temperature_for_non_reasoning(mock_post):
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "test response"}}]
+    }
+    mock_response.raise_for_status = MagicMock()
+    mock_post.return_value = mock_response
+
+    model = FlowLiteLLMChatModel(
+        base_url="https://example.com/flow-litellm",
+        flow_tenant="test-tenant",
+        flow_agent="test-agent",
+        model_name="gpt-4o",
+        temperature=0,
+        max_tokens=4096,
+        api_key="test-token",
+    )
+    model._generate([HumanMessage(content="hello")])
+
+    call_args = mock_post.call_args
+    payload = call_args[1]["json"]
+    assert payload["temperature"] == 0
+    assert payload["max_tokens"] == 4096
+
+
+@patch("bcp.llm_providers.requests.post")
+def test_flow_litellm_payload_omits_temperature_for_gpt6(mock_post):
     mock_response = MagicMock()
     mock_response.json.return_value = {
         "choices": [{"message": {"content": "test response"}}]
@@ -215,8 +243,11 @@ def test_flow_litellm_payload_includes_temperature_for_non_gpt5(mock_post):
 
     call_args = mock_post.call_args
     payload = call_args[1]["json"]
+    assert payload["reasoning_effort"] == "none"
     assert payload["temperature"] == 0
-    assert payload["max_tokens"] == 4096
+    assert payload["max_completion_tokens"] == 4096
+    assert "max_tokens" not in payload
+    assert payload["model"] == "gpt-6-luna"
 
 
 @patch("bcp.llm_providers.requests.post")
