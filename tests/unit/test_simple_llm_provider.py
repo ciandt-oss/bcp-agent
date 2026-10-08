@@ -118,11 +118,11 @@ def test_invoke_omits_auth_header_with_placeholder_key(mock_post, logger, mock_r
 @patch("bcp.simple_llm_provider.httpx.post")
 def test_invoke_sends_correct_payload(mock_post, logger, mock_response):
     mock_post.return_value = mock_response
-    provider = SimpleLLMProvider(logger, model="gpt-6-luna", base_url="http://localhost:8080/v1", api_key="test-key", temperature=0, max_tokens=2048)
+    provider = SimpleLLMProvider(logger, model="gpt-4o", base_url="http://localhost:8080/v1", api_key="test-key", temperature=0, max_tokens=2048)
     provider.invoke("My prompt text")
     call_kwargs = mock_post.call_args
     json_payload = call_kwargs.kwargs.get("json", {})
-    assert json_payload["model"] == "gpt-6-luna"
+    assert json_payload["model"] == "gpt-4o"
     assert json_payload["messages"] == [{"role": "user", "content": "My prompt text"}]
     assert json_payload["temperature"] == 0
     assert json_payload["max_tokens"] == 2048
@@ -178,3 +178,113 @@ def test_get_model_raises_not_implemented(logger):
     provider = SimpleLLMProvider(logger, model="test")
     with pytest.raises(NotImplementedError):
         provider.get_model()
+
+
+# --- Reasoning model temperature handling ---
+
+@patch("bcp.simple_llm_provider.httpx.post")
+def test_invoke_omits_temperature_for_gpt6(mock_post, logger, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"choices": [{"message": {"content": "Response"}}]}
+    mock_response.raise_for_status = MagicMock()
+    mock_post.return_value = mock_response
+
+    provider = SimpleLLMProvider(logger, model="gpt-6-luna", base_url="http://localhost:8080/v1")
+    provider.invoke("Hello")
+
+    payload = mock_post.call_args[1]["json"]
+    assert payload["reasoning_effort"] == "none"
+    assert payload["temperature"] == 0
+    assert payload["max_completion_tokens"] == 4096
+    assert "max_tokens" not in payload
+    assert payload["model"] == "gpt-6-luna"
+
+
+@patch("bcp.simple_llm_provider.httpx.post")
+def test_invoke_omits_temperature_for_gpt5(mock_post, logger, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"choices": [{"message": {"content": "Response"}}]}
+    mock_response.raise_for_status = MagicMock()
+    mock_post.return_value = mock_response
+
+    provider = SimpleLLMProvider(logger, model="gpt-5-nano", base_url="http://localhost:8080/v1")
+    provider.invoke("Hello")
+
+    payload = mock_post.call_args[1]["json"]
+    assert payload["reasoning_effort"] == "none"
+    assert payload["temperature"] == 0
+    assert payload["max_completion_tokens"] == 4096
+    assert "max_tokens" not in payload
+
+
+@patch("bcp.simple_llm_provider.httpx.post")
+def test_invoke_includes_temperature_for_non_reasoning(mock_post, logger, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"choices": [{"message": {"content": "Response"}}]}
+    mock_response.raise_for_status = MagicMock()
+    mock_post.return_value = mock_response
+
+    provider = SimpleLLMProvider(logger, model="claude-sonnet-4-6", base_url="http://localhost:8080/v1")
+    provider.invoke("Hello")
+
+    payload = mock_post.call_args[1]["json"]
+    assert payload["temperature"] == 0
+    assert "max_tokens" in payload
+
+
+# --- 400 fallback for reasoning models that don't support reasoning_effort="none" ---
+
+@patch("bcp.simple_llm_provider.httpx.post")
+def test_invoke_400_fallback_removes_reasoning_effort_and_temperature(mock_post, logger, monkeypatch):
+    """When a reasoning model rejects reasoning_effort='none' with HTTP 400, the retry
+    should remove reasoning_effort, temperature, and revert max_completion_tokens to max_tokens."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    # Capture payloads at call time (the code mutates the dict in-place for retry)
+    captured_payloads = []
+
+    def capture_and_respond(*args, **kwargs):
+        # Deep copy the json payload at call time
+        import copy
+        captured_payloads.append(copy.deepcopy(kwargs.get("json", {})))
+        call_index = len(captured_payloads) - 1
+        if call_index == 0:
+            # First call returns 400
+            bad_response = MagicMock()
+            bad_response.status_code = 400
+            bad_response.text = '{"error": "reasoning_effort none not supported"}'
+            return bad_response
+        else:
+            # Second call returns 200
+            good_response = MagicMock()
+            good_response.status_code = 200
+            good_response.json.return_value = {"choices": [{"message": {"content": "Response"}}]}
+            good_response.raise_for_status = MagicMock()
+            return good_response
+
+    mock_post.side_effect = capture_and_respond
+
+    provider = SimpleLLMProvider(logger, model="gpt-6-astra", base_url="http://localhost:8080/v1")
+    result = provider.invoke("Hello")
+
+    # Verify two calls were made
+    assert len(captured_payloads) == 2
+
+    # First call should have reasoning_effort, temperature, max_completion_tokens
+    first_payload = captured_payloads[0]
+    assert first_payload["reasoning_effort"] == "none"
+    assert first_payload["temperature"] == 0
+    assert first_payload["max_completion_tokens"] == 4096
+
+    # Second call (retry) should NOT have reasoning_effort or temperature,
+    # and max_completion_tokens should be reverted to max_tokens
+    second_payload = captured_payloads[1]
+    assert "reasoning_effort" not in second_payload
+    assert "temperature" not in second_payload
+    assert "max_completion_tokens" not in second_payload
+    assert second_payload["max_tokens"] == 4096
+
+    assert result == "Response"

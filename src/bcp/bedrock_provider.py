@@ -13,8 +13,15 @@ Auth behavior:
 API reference:
 - Endpoint: POST https://bedrock-runtime.{region}.amazonaws.com/model/{modelId}/converse
 - Auth: Authorization: Bearer {token}
-- Request: {"messages": [{"role": "user", "content": [{"text": "..."}]}], "inferenceConfig": {...}}
+- Request: {"messages": [...], "inferenceConfig": {...}, "additionalModelRequestFields": {...}}
 - Response: {"output": {"message": {"content": [{"text": "..."}]}}}
+
+Reasoning model handling:
+- For reasoning models (gpt-5+, gpt-6, o-series), temperature is omitted from
+  inferenceConfig (not accepted when reasoning is on) and reasoning_effort="none"
+  is passed via additionalModelRequestFields to disable reasoning for determinism.
+  If the model doesn't support this field, Bedrock silently ignores it.
+- For non-reasoning models, temperature and maxTokens are sent normally.
 
 This provider inherits from LLMProvider for interface compatibility.
 """
@@ -26,6 +33,7 @@ from typing import Optional
 import httpx
 
 from .llm_providers import LLMProvider
+from .model_utils import is_reasoning_model
 
 
 class BedrockProvider(LLMProvider):
@@ -96,13 +104,22 @@ class BedrockProvider(LLMProvider):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}",
         }
+        inference_config = {}
+        if not is_reasoning_model(self.model_name):
+            inference_config["temperature"] = self.temperature
+        inference_config["maxTokens"] = self.max_tokens
         payload = {
             "messages": [{"role": "user", "content": [{"text": prompt}]}],
-            "inferenceConfig": {
-                "temperature": self.temperature,
-                "maxTokens": self.max_tokens,
-            },
+            "inferenceConfig": inference_config,
         }
+
+        # For reasoning models, pass reasoning_effort via additionalModelRequestFields
+        # (the Converse API doesn't support reasoning_effort in inferenceConfig).
+        # This attempts to disable reasoning for maximum determinism, matching the
+        # behavior of other providers. If the model doesn't support it, Bedrock
+        # silently ignores the field — no HTTP 400.
+        if is_reasoning_model(self.model_name):
+            payload["additionalModelRequestFields"] = {"reasoning_effort": "none"}
 
         self.logger.debug(
             f"Sending prompt to {self.url} (model={self.model_name}, "

@@ -223,6 +223,47 @@ The script uses an async job model to communicate with the local API server:
 
 If any cells fail, the script automatically retries up to 2 more times (3 total attempts).
 
+---
+
+> ## ⚠️ Important: Why the Skill Delegates to the API Server (Instead of Running Prompts Locally)
+>
+> The BCP 13-dimensions calculation is not a mathematical formula — it consists of **14 independent LLM calls** with specialized prompts that return structured JSON, followed by consolidation and scoring. Running these prompts directly in the skill (i.e., having the agent process them locally) would introduce three significant problems:
+>
+> ### 1. Local Environment Interference
+>
+> The agent running on the user's machine may have other tools configured (MCP servers, hooks, custom skills, plugins). During the processing of the 14 prompts, the agent could inadvertently call these tools or interpret the output differently on each execution, introducing variability in the results — the exact opposite of what is needed in a complexity metric.
+>
+> ### 2. No Control Over Model and Parameters
+>
+> The API server runs with a configured LLM provider (model, temperature=0, max_tokens) in a dedicated, isolated environment. This ensures determinism and consistency across executions. In the user's local environment, there is no control over which model the agent is using, what temperature is set, or whether system prompts are injecting extra behavior.
+>
+> ### 3. Scoring Reliability
+>
+> The `FormulaEvaluator` (AST-based expression evaluator) and the failed-cell retry logic run on the server. Porting all of this to the skill would mean reimplementing this logic in scripts that run in the agent's non-isolated context, subject to the same interference.
+>
+> ### Current Architecture
+>
+> The skill does only what it is good at: **identify stories, format input, call the API, and present results**. The heavy computation happens on the server (`run_api_server.py`), which provides:
+> - Isolated, dedicated environment
+> - Configurable and consistent LLM provider
+> - 14-cell pipeline with 3 parallel waves
+> - Automatic retry of failed cells
+> - Deterministic scoring via `FormulaEvaluator`
+>
+> ### Recommendation: Host the API on an Internal Cloud
+>
+> If the goal is to eliminate the step of starting the server locally for each user, the recommendation is to **host the API server on an internal cloud** (e.g., a container on ECS, Cloud Run, or an EC2 instance). In this scenario:
+>
+> - The skill would point to `--base-url https://bcp-api.internal.example.com` (or equivalent)
+> - Users do not need to start anything locally — the skill checks the endpoint and proceeds
+> - The team retains full control over model, prompt versions, temperature, and configurations
+> - Centralized logging, usage monitoring, and SLA guarantees
+> - Updates to prompts or the pipeline are applied in one place, without requiring users to update the skill
+>
+> This would be a configuration change only (environment variable or `--base-url` parameter) — no code changes needed. The skill already supports this natively.
+
+---
+
 ## Troubleshooting
 
 ### Common Issues
