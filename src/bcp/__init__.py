@@ -12,6 +12,7 @@ from .prompt_handler import PromptHandler
 from .formula_evaluator import FormulaEvaluator
 from .llm_providers import get_provider, LLMProvider, OpenAIProvider, ClaudeProvider
 from .simple_llm_provider import SimpleLLMProvider
+from .bedrock_provider import BedrockProvider
 from .logger import setup_logger, StepLogger
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     'OpenAIProvider',
     'ClaudeProvider',
     'SimpleLLMProvider',
+    'BedrockProvider',
     'get_provider',
     'setup_logger',
     'StepLogger',

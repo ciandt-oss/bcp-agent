@@ -20,7 +20,7 @@ This provider inherits from LLMProvider for interface compatibility.
 
 import logging
 import os
-from typing import Optional
+from typing import Dict, Optional
 
 import httpx
 
@@ -43,7 +43,8 @@ class SimpleLLMProvider(LLMProvider):
 
     def __init__(self, logger: logging.Logger, model: str = "gpt-6-luna",
                  api_key: Optional[str] = None, base_url: Optional[str] = None,
-                 temperature: float = 0, max_tokens: int = 4096, timeout: float = 300):
+                 temperature: float = 0, max_tokens: int = 4096, timeout: float = 300,
+                 extra_headers: Optional[Dict[str, str]] = None):
         """
         Initialize the SimpleLLMProvider.
 
@@ -57,6 +58,8 @@ class SimpleLLMProvider(LLMProvider):
             temperature: Sampling temperature (default: 0 for deterministic output)
             max_tokens: Maximum tokens to generate (default: 4096)
             timeout: Request timeout in seconds (default: 300)
+            extra_headers: Optional dict of additional HTTP headers to send with each request
+                          (e.g. {"HTTP-Referer": "...", "X-Title": "..."} for OpenRouter)
         """
         super().__init__(logger)
         self.model = model
@@ -67,6 +70,7 @@ class SimpleLLMProvider(LLMProvider):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout = timeout
+        self.extra_headers = extra_headers or {}
         self.logger.info(f"SimpleLLMProvider: model={model}, base_url={self.base_url}")
 
     def get_model(self):
@@ -105,6 +109,7 @@ class SimpleLLMProvider(LLMProvider):
         headers = {"Content-Type": "application/json"}
         if self._should_send_auth():
             headers["Authorization"] = f"Bearer {self.api_key}"
+        headers.update(self.extra_headers)
 
         self.logger.debug(
             f"Sending prompt to {url} (model={self.model}, prompt_len={len(prompt)}, auth={'yes' if 'Authorization' in headers else 'no'})"

@@ -22,3 +22,6 @@ openpyxl==3.1.5
 
 # MCP server support
 mcp[cli]
+
+# AWS Bedrock native provider (bearer token auth via aws_bedrock_token_generator)
+aws-bedrock-token-generator==1.1.0

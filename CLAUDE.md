@@ -26,7 +26,8 @@ The tool also provides functionality to compare results between different LLM pr
   - `invest-maturity.md`: INVEST maturity evaluation prompt
 - **tests/compare_providers.py**: Tool for comparing BCP results between different providers
 - **tests/data/**: Directory containing sample user stories for testing
-- **`skill/bcp-calculator-13d/`**: Self-contained Claude Code skill for BCP 13D calculation. No external API, no SDK, no provider configuration — the agent processes prompts directly. Contains `SKILL.md` (agent instructions), `scripts/bcp_pipeline.py` (score calculation utility, stdlib only), and `prompts/thirteen/` (14 prompt templates, self-contained copy).
+- **`skills/bcp-calculator-13d/`**: Claude Code skill for BCP 13D calculation. Calls the **local API server** (`run_api_server.py`) via an async job model (POST `/calculate` → poll GET `/status/{job_id}`). Contains `SKILL.md` (agent instructions) and `scripts/bcp_calculate_13d.py` (API client script, stdlib only). Requires the API server to be running — no authentication token needed. Currently in **alpha testing**.
+- **`skills/bcp-story-writing-coach/`**: Claude Code skill that rewrites existing user stories using the 13 BCP dimension scoring rules as a writing guide. Does not calculate BCP — improves story writing quality via gap-driven questionnaire. Contains `SKILL.md` (agent instructions) and `rules/` (13 dimension rule files, D1–D13).
 
 ### Flow Structure
 
@@ -156,46 +157,84 @@ When using the provider comparison functionality, reports include:
   - Processing time comparison
   - Component breakdown averages
 
-## Standalone Skill (`skill/bcp-calculator-13d/`)
+## Claude Code Skills (`skills/`)
 
-A self-contained Claude Code skill that calculates BCP 13 dimensions without any external API, SDK, or provider. The agent processes the prompts directly — Claude IS the LLM.
+The `skills/` directory contains two Claude Code skills that provide agent-driven interfaces to the BCP Calculator.
 
-### Structure
+### BCP Calculator 13D Skill (`skills/bcp-calculator-13d/`)
+
+A Claude Code skill that calculates BCP 13 dimensions by calling the **local API server** (`run_api_server.py`). It is not standalone — it requires the API server to be running on `http://127.0.0.1:8000`.
+
+> **⚠️ Alpha Testing:** This skill is currently in alpha. Scoring results may vary between runs and should not be used as the sole basis for sizing decisions.
+
+#### Structure
 
 ```
-skill/bcp-calculator-13d/
-├── SKILL.md                    # Agent instructions (trigger, pipeline steps, output format)
-├── scripts/bcp_pipeline.py     # Score calculation & consolidation (stdlib only, no pip)
-└── prompts/thirteen/           # 14 self-contained prompt templates (own copy, not from src/bcp/)
-    ├── functional/             # 10 functional dimension prompts + aggregator
-    ├── nfr-scoring.md          # NFR scoring (3 dimensions)
-    ├── complexity-maturity.md  # Complexity Maturity Score (CMS)
-    └── invest-maturity.md      # INVEST Maturity Score (IMS)
+skills/bcp-calculator-13d/
+├── SKILL.md                        # Agent instructions (trigger, pipeline steps, output format)
+└── scripts/
+    └── bcp_calculate_13d.py        # API client script (stdlib only, no pip)
 ```
 
-### How It Differs from `src/bcp/`
+#### How It Works
 
-| Aspect | `src/bcp/` (bcp-agent) | `skill/bcp-calculator-13d/` (skill) |
+1. **Checks the local server** — verifies that `run_api_server.py` is running
+2. **Identifies stories** — from inline text, a `.md` file, or a folder of `story-*.md` files
+3. **Calls the bundled script** — `bcp_calculate_13d.py` submits each story to the local API (`POST /calculate`) and polls for results (`GET /status/{job_id}` every 3 seconds)
+4. **Presents the results** — formats JSON output into Markdown tables with BCP Total, CMS, IMS, and all 13 dimension scores
+
+No authentication token is required — the local API server accepts requests directly.
+
+#### How It Differs from `src/bcp/`
+
+| Aspect | `src/bcp/` (bcp-agent) | `skills/bcp-calculator-13d/` (skill) |
 |--------|------------------------|--------------------------------------|
-| LLM calls | Uses LangChain + LLM providers (OpenAI, Claude, Flow) | Agent processes prompts directly (no SDK) |
-| Dependencies | langchain, jinja2, openai, anthropic (pip packages) | Python stdlib only (for `bcp_pipeline.py`) |
-| Prompts | `src/bcp/prompts/thirteen/` (shared) | `skill/.../prompts/thirteen/` (own copy) |
-| Formula eval | `formula_evaluator.py` (AST-based) | `bcp_pipeline.py` (inline in script) |
-| Configuration | `.env` with API keys, model names, base URLs | None — fully agnostic |
+| LLM calls | Uses LangChain + LLM providers (OpenAI, Claude, Flow, Bedrock, OpenRouter, HuggingFace) | Delegates to local API server (which uses LangChain internally) |
+| Dependencies | langchain, jinja2, openai, anthropic (pip packages) | Python stdlib only (for `bcp_calculate_13d.py`) |
+| Prompts | `src/bcp/prompts/thirteen/` (shared) | Not needed — the API server owns the prompts |
+| Configuration | `.env` with API keys, model names, base URLs | None — only the API server needs configuration |
+| Auth | API keys per provider | No token needed — local server has no auth |
 | Use case | CLI tool, API server, MCP server, SDK | Claude Code skill invocation |
 
-### `bcp_pipeline.py` Commands
+#### `bcp_calculate_13d.py` — API Client Script
 
-| Command | Purpose |
-|---------|---------|
-| `score --cell <name> --output <json>` | Calculate a single cell's score |
-| `aggregate --bindings <json>` | Calculate aggregator score from 10 dim bindings |
-| `consolidate --input <file>` | Consolidate all 14 cell outputs into structured JSON |
-| `aggregate-stories --input <file>` | Aggregate multiple stories into summary report |
+A standalone Python script (stdlib only) that communicates with the local API server:
 
-### Determinism Enforcement
+| Action | Purpose |
+|--------|---------|
+| Submit job | `POST /calculate` with `{"content": "...", "provider": "openai"}` |
+| Poll status | `GET /status/{job_id}` every 3 seconds until completed or failed (timeout: 300s) |
+| Parse result | Extracts BCP total, CMS, IMS, and 13 dimension scores from the response |
+| Retry | Automatically retries up to 2 more times if any cells fail (3 total attempts) |
 
-The `SKILL.md` enforces absolute determinism: each prompt must return exactly the JSON it specifies — no variations, no abstractions, no extra fields, no missing fields. Variance testing (10 runs per story) showed CV average of 2.40%, with 1 of 4 stories achieving perfect determinism (CV = 0%).
+### BCP Story Writing Coach Skill (`skills/bcp-story-writing-coach/`)
+
+A Claude Code skill that rewrites existing user stories using the 13 BCP dimension scoring rules as a writing guide. It does **not** calculate BCP — it improves story writing quality by making implicit content explicit via a gap-driven questionnaire.
+
+#### Structure
+
+```
+skills/bcp-story-writing-coach/
+├── SKILL.md                        # Agent instructions (trigger, analysis steps, output format)
+└── rules/                          # 13 dimension rule files (pedagogical, no scoring values)
+    ├── README.md                   # Rules index
+    ├── d01-business-rules.md       # D1  · Business Rules
+    ├── d02-interface-elements.md   # D2  · Interface Elements
+    ├── ...                         # D3–D12
+    └── d13-ux-accessibility.md     # D13 · UX & Accessibility
+```
+
+#### Key Principle — No Invention
+
+Every change in the rewritten story must be traceable to: (1) explicit content already in the story, (2) implicit content that is a direct deduction, or (3) user responses from the questionnaire. The skill never fills gaps on its own.
+
+#### How It Works
+
+1. **Receives the story** — from inline text, a `.md` file, or a folder
+2. **Static analysis** — determines which of the 13 dimensions are relevant and where gaps exist (uses `rules/` as reading guide, progressive disclosure)
+3. **Gap-driven questionnaire** — presents gaps in rounds of ~5 questions, prioritized by impact
+4. **Rewrites the story** — incorporates explicit + implicit + questionnaire answers (no invention)
+5. **Presents output** — annotated diff, clean version, rationale per dimension, unaddressed gaps table
 
 ## Code Conventions
 - Follow Python PEP 8 style guidelines

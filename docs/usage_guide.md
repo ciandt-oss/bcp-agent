@@ -49,7 +49,7 @@ The BCP Agent supports several command-line arguments to customize its behavior:
 | `--log-level` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) | INFO |
 | `--output-file` | Path to save the results (if not specified, prints to stdout) | None |
 | `--format` | Output format (text or json) | json |
-| `--provider` | LLM provider to use (openai, claude, flow-openai, flow-bedrock) | openai |
+| `--provider` | LLM provider to use (openai, claude, flow-openai, bedrock, openrouter, huggingface) | openai |
 | `--max-workers` | Maximum parallel threads per wave | 5 |
 
 ## Examples
