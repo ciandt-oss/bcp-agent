@@ -387,6 +387,18 @@ Coverage is configured in `.coveragerc` and `pyproject.toml`. Coverage source is
 | Python SDK | `from src.sdk import BCPClient` | [sdk_usage.md](docs/usage/sdk_usage.md) |
 | Skill (13D) | `skills/bcp-calculator-13d/` | [skill_usage.md](docs/usage/skill_usage.md) |
 | Skill (Coach) | `skills/bcp-story-writing-coach/` | [SKILL.md](skills/bcp-story-writing-coach/SKILL.md) |
+| Troubleshooting | — | [troubleshooting.md](docs/usage/troubleshooting.md) |
+
+## Troubleshooting — read this first
+
+When a user reports a setup, network, or provider error in this project — `pip install`
+failures, SSL/certificate errors, HTTP 302 redirects to sign-in pages, authentication failures,
+or "my `.env` change did nothing" — read
+[`docs/usage/troubleshooting.md`](docs/usage/troubleshooting.md) **before** debugging from
+scratch. It maps each known error to its verified root cause and fix (Python version, corporate
+VPN TLS inspection, missing Flow credentials, stale environment/jobs). If the reported error is
+not covered there, debug it, then add a section for it so the next occurrence is diagnosed in
+seconds.
 
 ## Pitfalls to Avoid
 

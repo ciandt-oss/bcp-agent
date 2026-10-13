@@ -410,6 +410,7 @@ The output includes:
   - `mcp_usage.md`: MCP usage guide
   - `sdk_usage.md`: SDK usage guide
   - `skill_usage.md`: Claude Code skill usage guide (13D)
+  - `troubleshooting.md`: Troubleshooting guide — known errors, root causes, and fixes
   - `README.md`: Index of usage guides
 - `README.md`: Project documentation
 - `LICENSE`: License information
