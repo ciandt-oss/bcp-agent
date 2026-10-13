@@ -131,6 +131,13 @@ The application should handle:
 
 ## Troubleshooting
 
+> **Read this before debugging from scratch:** when a user reports a setup, network, or
+> provider error — `pip install` failures, SSL/certificate errors, HTTP 302 redirects to
+> sign-in pages, authentication failures, or "my `.env` change did nothing" — consult
+> [`docs/usage/troubleshooting.md`](docs/usage/troubleshooting.md). It maps each known error to
+> its verified root cause and fix. If the error is not covered there, debug it and then add a
+> section for it.
+
 ### Common Issues
 - **API Key Issues**: Ensure the appropriate API keys are properly set in `.env`
 - **Missing Dependencies**: Run `pip install -r requirements.txt`

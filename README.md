@@ -45,14 +45,32 @@ The recommended model is `gpt-6-luna` with `temperature=0`. This combination was
 
 ## Installation
 
+### Prerequisites
+
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| Python | **3.10 or higher** | Declared in `setup.py` (`python_requires=">=3.10"`); tested on 3.10–3.12. Python 3.9 and older cannot install the pinned dependencies — see [Troubleshooting](docs/usage/troubleshooting.md#1-installation-failure-no-matching-distribution-found). |
+| pip | Latest (no pinned minimum) | Must belong to the **same interpreter** as your venv. Upgrade it inside the venv with `python -m pip install --upgrade pip`. |
+
+Verify both before installing — the interpreter path shown by pip is the one it will use:
+
+```
+python3 --version      # must print 3.10 or higher
+python3 -m pip --version
+```
+
+> **Important:** create the virtual environment with a 3.10+ interpreter (`python3.12 -m venv .venv`) — on some systems `python3` still points to an older version, and a pip installed under a different interpreter will fail with a misleading `ERROR: No matching distribution found for langchain==...`. Note that `pip install -r requirements.txt` does **not** enforce the minimum Python version declared in `setup.py` — that check only applies when installing the `bcp-calculator` package itself.
+
 1. Clone this repository:
    ```
    git clone <repository-url>
    cd bcp-agent
    ```
 
-2. Install the required dependencies:
+2. Create a virtual environment and install the required dependencies:
    ```
+   python3.12 -m venv .venv          # use any 3.10+ interpreter
+   source .venv/bin/activate
    pip install -r requirements.txt
    ```
 
@@ -410,6 +428,7 @@ The output includes:
   - `mcp_usage.md`: MCP usage guide
   - `sdk_usage.md`: SDK usage guide
   - `skill_usage.md`: Claude Code skill usage guide (13D)
+  - `troubleshooting.md`: Troubleshooting guide — known errors, root causes, and fixes
   - `README.md`: Index of usage guides
 - `README.md`: Project documentation
 - `LICENSE`: License information
