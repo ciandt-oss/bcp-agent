@@ -1,4 +1,5 @@
 import logging
+import json
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -6,7 +7,7 @@ from bcp.llm_providers import (
     get_provider, OpenAIProvider, ClaudeProvider,
     FlowLiteLLMProvider,
 )
-from bcp.llm_providers import FlowLiteLLMChatModel
+from bcp.llm_providers import FlowLiteLLMChatModel, build_spend_logs_metadata
 from bcp.simple_llm_provider import SimpleLLMProvider
 from bcp.logger import setup_logger
 from langchain_core.messages import HumanMessage
@@ -274,6 +275,92 @@ def test_flow_litellm_includes_flow_headers(mock_post):
     headers = call_args[1]["headers"]
     assert headers["FlowTenant"] == "my-tenant"
     assert headers["FlowAgent"] == "my-agent"
+
+
+@patch("bcp.llm_providers.requests.post")
+def test_flow_litellm_includes_ident_headers(mock_post):
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "test response"}}]
+    }
+    mock_response.raise_for_status = MagicMock()
+    mock_post.return_value = mock_response
+
+    model = FlowLiteLLMChatModel(
+        base_url="https://example.com/flow-litellm",
+        flow_tenant="my-tenant",
+        flow_agent="my-agent",
+        model_name="gpt-6-luna",
+        temperature=0,
+        max_tokens=4096,
+        api_key="test-token",
+    )
+    model._generate([HumanMessage(content="hello")])
+
+    headers = mock_post.call_args[1]["headers"]
+    assert headers["User-Agent"] == "bcp-oss/bcp-calculator-13dimensions"
+    metadata = json.loads(headers["x-litellm-spend-logs-metadata"])
+    assert metadata["agent_name"] == "bcp-calculator-13dimensions"
+    assert metadata["agent_id"] == "046c72fe-99ed-4373-a71e-4a5587345a71"
+    assert metadata["engine"] == "bcp-oss"
+    assert metadata["additional_info"]["provider"] == "flow-openai"
+    assert metadata["additional_info"]["model"] == "gpt-6-luna"
+
+
+@patch("bcp.llm_providers.requests.post")
+def test_flow_litellm_400_fallback_keeps_ident_headers(mock_post):
+    responses = []
+
+    def respond(*args, **kwargs):
+        if len(responses) == 0:
+            bad = MagicMock()
+            bad.status_code = 400
+            bad.text = '{"error": "reasoning_effort none not supported"}'
+            responses.append(bad)
+            return bad
+        good = MagicMock()
+        good.status_code = 200
+        good.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        good.raise_for_status = MagicMock()
+        responses.append(good)
+        return good
+
+    mock_post.side_effect = respond
+
+    model = FlowLiteLLMChatModel(
+        base_url="https://example.com/flow-litellm",
+        flow_tenant="my-tenant",
+        flow_agent="my-agent",
+        model_name="gpt-6-astra",
+        temperature=0,
+        max_tokens=4096,
+        api_key="test-token",
+    )
+    model._generate([HumanMessage(content="hello")])
+
+    assert mock_post.call_count == 2
+    first_headers = mock_post.call_args_list[0][1]["headers"]
+    retry_headers = mock_post.call_args_list[1][1]["headers"]
+    for headers in (first_headers, retry_headers):
+        assert headers["User-Agent"] == "bcp-oss/bcp-calculator-13dimensions"
+        metadata = json.loads(headers["x-litellm-spend-logs-metadata"])
+        assert metadata["agent_id"] == "046c72fe-99ed-4373-a71e-4a5587345a71"
+        assert metadata["engine"] == "bcp-oss"
+    assert first_headers["x-litellm-spend-logs-metadata"] == \
+        retry_headers["x-litellm-spend-logs-metadata"]
+
+
+def test_build_spend_logs_metadata_encodes_values():
+    header = build_spend_logs_metadata(
+        agent_name="Agência Tést",
+        agent_id="046c72fe-99ed-4373-a71e-4a5587345a71",
+        engine="bcp-oss",
+        additional_info={"model": "gpt-6-luna"},
+    )
+    assert "\n" not in header
+    metadata = json.loads(header)
+    assert metadata["agent_name"] == "Ag%C3%AAncia%20T%C3%A9st"
+    assert metadata["additional_info"]["model"] == "gpt-6-luna"
 
 
 # --- 400 fallback for reasoning models that don't support reasoning_effort="none" ---

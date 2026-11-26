@@ -14,6 +14,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Union, List, Iterator
+from urllib.parse import quote
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.language_models import BaseLanguageModel
@@ -149,6 +150,22 @@ class ClaudeProvider(LLMProvider):
         return ChatAnthropic(**kwargs)
 
 
+AGENT_ID_BCP_OSS = "046c72fe-99ed-4373-a71e-4a5587345a71"
+FLOW_LITELLM_REQUEST_TIMEOUT_SECONDS = 300
+
+
+def build_spend_logs_metadata(agent_name: str, agent_id: str, engine: str,
+                              additional_info: dict) -> str:
+    """Build the x-litellm-spend-logs-metadata header value (one line, values percent-encoded)."""
+    metadata = {
+        "agent_name": quote(agent_name, safe=""),
+        "agent_id": quote(agent_id, safe=""),
+        "engine": quote(engine, safe=""),
+        "additional_info": {k: quote(str(v), safe="") for k, v in additional_info.items()},
+    }
+    return json.dumps(metadata)
+
+
 class FlowLiteLLMChatModel(BaseChatModel):
     """Custom implementation for Flow's LiteLLM Proxy Chat Completions API.
 
@@ -157,9 +174,10 @@ class FlowLiteLLMChatModel(BaseChatModel):
 
     Key characteristics:
     - URL: {base_url}/v1/chat/completions (calls /v1/chat/completions directly)
-    - Auth header: FlowToken (not Authorization: Bearer)
+    - Auth header: Authorization: Bearer (JWT from FLOW_LITELLM_TOKEN_JWT)
+    - Ident headers: User-Agent {engine}/{agent_name} and
+      x-litellm-spend-logs-metadata with agent_name/agent_id/engine/additional_info
     - Payload: temperature/max_tokens omitted for gpt-5/nano reasoning models
-    - Auth: Azure AD B2C OAuth2 client_credentials grant (NOT auth-engine-api)
     """
 
     base_url: str
@@ -169,6 +187,9 @@ class FlowLiteLLMChatModel(BaseChatModel):
     temperature: float
     max_tokens: int
     api_key: Optional[str]
+    agent_engine: str = "bcp-oss"
+    agent_name: str = "bcp-calculator-13dimensions"
+    agent_id: str = AGENT_ID_BCP_OSS
 
     class Config:
         arbitrary_types_allowed = True
@@ -228,6 +249,14 @@ class FlowLiteLLMChatModel(BaseChatModel):
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
+        headers["User-Agent"] = f"{self.agent_engine}/{self.agent_name}"
+        headers["x-litellm-spend-logs-metadata"] = build_spend_logs_metadata(
+            agent_name=self.agent_name,
+            agent_id=self.agent_id,
+            engine=self.agent_engine,
+            additional_info={"provider": "flow-openai", "model": model_name},
+        )
+
         url = f"{base_url}/v1/chat/completions"
 
         if is_reasoning_model(model_name):
@@ -250,7 +279,8 @@ class FlowLiteLLMChatModel(BaseChatModel):
             payload["stop"] = stop
 
         try:
-            response = requests.post(url, json=payload, headers=headers)
+            response = requests.post(url, json=payload, headers=headers,
+                                     timeout=FLOW_LITELLM_REQUEST_TIMEOUT_SECONDS)
 
             # Fallback: some models (e.g. gpt-6-astra) don't support reasoning_effort="none"
             # and return HTTP 400. When reasoning is on, temperature is also not accepted.
@@ -260,7 +290,8 @@ class FlowLiteLLMChatModel(BaseChatModel):
                 payload.pop("temperature", None)
                 if "max_completion_tokens" in payload:
                     payload["max_tokens"] = payload.pop("max_completion_tokens")
-                response = requests.post(url, json=payload, headers=headers)
+                response = requests.post(url, json=payload, headers=headers,
+                                         timeout=FLOW_LITELLM_REQUEST_TIMEOUT_SECONDS)
 
             response.raise_for_status()
             data = response.json()
